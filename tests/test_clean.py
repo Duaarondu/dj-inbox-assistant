@@ -1,6 +1,6 @@
 # tests/test_clean.py
 """Edge cases for cleaning and redaction. Every bug found in the cleaner gets a case here."""
-from dj_inbox.ingest.clean import clean_body, find_contacts, redact, strip_quoted, strip_signature
+from dj_inbox.ingest.clean import clean_body, redact, strip_quoted, strip_signature
 
 REPLY = """Thanks for the quick reply! One question: How early do you get there?
 

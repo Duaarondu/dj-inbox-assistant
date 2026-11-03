@@ -2,7 +2,6 @@
 """Run the reader on the synthetic inbox and check it against the generator's known answers."""
 import json
 import mailbox
-from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -16,8 +15,9 @@ COMPANY = CompanyConfig(domains=["northshoresound.example"])
 
 @pytest.fixture(scope="module")
 def gold():
-    threads = {json.loads(l)["thread_id"]: json.loads(l) for l in (DATA / "threads.jsonl").open(encoding="utf-8")}
-    leads = [json.loads(l) for l in (DATA / "ground_truth_leads.jsonl").open(encoding="utf-8")]
+    with (DATA / "threads.jsonl").open(encoding="utf-8") as fh:
+        threads = {row["thread_id"]: row for row in map(json.loads, fh)}
+    leads = [json.loads(line) for line in (DATA / "ground_truth_leads.jsonl").open(encoding="utf-8")]
     return threads, leads
 
 
@@ -39,7 +39,9 @@ def test_threads_rebuild_without_gmail_ids(tmp_path, read):
         dst.add(msg)
     dst.flush()
     regrouped = read_mbox(tmp_path / "plain.mbox", COMPANY)
-    groups = lambda ts: sorted(sorted(m.message_id for m in t.messages) for t in ts)
+    def groups(ts):
+        return sorted(sorted(m.message_id for m in t.messages) for t in ts)
+
     assert groups(regrouped) == groups(read.values())
 
 
@@ -67,7 +69,7 @@ def test_no_quoted_history_left(read):
     for t in read.values():
         for m in t.messages:
             assert "wrote:" not in m.body_clean, m.message_id
-            assert not any(l.lstrip().startswith(">") for l in m.body_clean.splitlines()), m.message_id
+            assert not any(line.lstrip().startswith(">") for line in m.body_clean.splitlines()), m.message_id
 
 
 def test_no_company_signature_left(read):

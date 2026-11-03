@@ -14,7 +14,7 @@ class CompanyConfig(BaseModel):
     """What the reader needs to know about the company whose inbox this is."""
     domains: list[str]                                   # e.g. ["northshoresound.example"]
     form_senders: list[str] = Field(default_factory=lambda: ["noreply", "no-reply", "forms"])
-    
+
     def is_form(self, address: str) -> bool:
         """True for the company's own website-form address, e.g. noreply@northshoresound.example."""
         local, _, domain = address.lower().partition("@")

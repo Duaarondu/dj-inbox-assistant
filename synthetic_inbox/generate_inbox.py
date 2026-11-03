@@ -71,7 +71,8 @@ QA_PAIRS = [
     ("Do you bring backup equipment in case something breaks?",
      "Always. A full backup system travels with every event."),
     ("What's your cancellation policy?",
-     "The deposit is non-refundable, but if you need to move your date we'll apply it to the new date as long as we're available."),
+     "The deposit is non-refundable, but if you need to move your date we'll apply it to the new date "
+     "as long as we're available."),
     ("Our venue needs a certificate of insurance. Do you have liability insurance?",
      "Yes, we carry $2M in liability coverage and can send the venue a certificate of insurance."),
     ("How early do you get there to set up?",
@@ -312,7 +313,8 @@ def inquiry_body(ctx: Ctx, rng: random.Random) -> str:
     if e == "wedding":
         text = rng.choice([
             f"My fiancé {ctx.partner} and I are getting married on {d} at {v} and we're looking for a DJ. "
-            f"We're expecting about {g} guests and need music for {h} hours.{addon_s}{budget_s} Could you send pricing?",
+            f"We're expecting about {g} guests and need music for {h} hours.{addon_s}{budget_s} "
+            "Could you send pricing?",
             f"Do you have availability for our wedding on {d}? It's at {v}, around {g} guests, {h} hours of music."
             f"{addon_s}{budget_s} What would that cost?",
             f"We're getting married {d} at {v} ({g} guests) and need a DJ for {h} hours, ceremony through "
@@ -736,7 +738,8 @@ def write_jsonl(rows: list[dict], path: Path) -> None:
 def write_venue_leads(threads: list[Thread], rng: random.Random, path: Path) -> None:
     """Monthly lists the house venues send: same columns every month."""
     rows = []
-    referral = [l for t in threads for l in t.leads if l["source"] == "venue_referral" and l["lead_index"] == 0]
+    referral = [lead for t in threads for lead in t.leads
+                if lead["source"] == "venue_referral" and lead["lead_index"] == 0]
     for lead in referral:
         first_at = datetime.fromisoformat(lead["first_message_at"])
         m = date(first_at.year, first_at.month, 1)
@@ -752,12 +755,12 @@ def write_venue_leads(threads: list[Thread], rng: random.Random, path: Path) -> 
     while month <= date(2026, 10, 1):
         for v in [v for v in VENUES if v.house]:
             for _ in range(rng.randint(1, 4)):
-                f, l, p = rng.choice(FIRST), rng.choice(LAST), rng.choice(FIRST)
+                f, last, p = rng.choice(FIRST), rng.choice(LAST), rng.choice(FIRST)
                 ev = snap_to_weekend(month + timedelta(days=rng.randint(120, 450)), rng)
                 rows.append({"report_month": month.strftime("%Y-%m"), "venue": v.name,
-                             "couple": f"{f} {l} & {p}", "event_date": ev.isoformat(),
+                             "couple": f"{f} {last} & {p}", "event_date": ev.isoformat(),
                              "guest_count": rng.randrange(80, 251, 5),
-                             "contact_email": f"{f.lower()}.{l.lower().replace(chr(39), '')}@example.com",
+                             "contact_email": f"{f.lower()}.{last.lower().replace(chr(39), '')}@example.com",
                              "contact_phone": f"(516) 555-01{rng.randint(10, 99)}",
                              "coordinator_note": rng.choice(["Ceremony on site", "Reception only",
                                                              "Prefers a call after 6pm", "Asked about uplighting",
@@ -775,7 +778,8 @@ def price_sheet_md(year: int, current: bool) -> str:
     s = PRICE_SHEETS[year]
     head = (f"# {COMPANY}: Packages and Pricing {year}\n\n"
             + ("Current price sheet. Effective January 1, 2026.\n\n" if current
-               else "SUPERSEDED: this sheet was replaced on January 1, 2026. Quotes sent in 2025 used these prices.\n\n"))
+               else "SUPERSEDED: this sheet was replaced on January 1, 2026. "
+                    "Quotes sent in 2025 used these prices.\n\n"))
     pk = "\n".join(f"| {p} | {PACKAGE_HOURS[p]} | {money(s['packages'][p])} | {PACKAGE_INCLUDES[p]} |"
                    for p in PACKAGE_HOURS)
     ad = "\n".join(f"| {a[0].upper() + a[1:]} | {money(v)} |" for a, v in s["addons"].items())
@@ -833,17 +837,17 @@ def main() -> None:
         {"from": f"{m.sender_name} <{m.sender_email}>", "to": f"{m.to_name} <{m.to_email}>",
          "date": m.sent_at.isoformat(), "body": m.body} for m in t.messages]} for t in threads],
         args.out / "threads.jsonl")
-    write_jsonl([l for t in threads for l in t.leads], args.out / "ground_truth_leads.jsonl")
+    write_jsonl([lead for t in threads for lead in t.leads], args.out / "ground_truth_leads.jsonl")
     write_venue_leads(threads, rng, args.out / "venue_leads.csv")
     (args.out / "company_kb.md").write_text(company_kb_md(), encoding="utf-8")
     (args.out / "price_sheet_2025.md").write_text(price_sheet_md(2025, current=False), encoding="utf-8")
 
-    leads = [l for t in threads for l in t.leads]
+    leads = [lead for t in threads for lead in t.leads]
     tags = Counter(tag for t in threads for tag in t.leads[0]["tags"])
     print(f"{len(threads)} threads, {sum(len(t.messages) for t in threads)} messages, {len(leads)} leads")
-    print("status:", dict(Counter(l["status"] for l in leads if l["lead_index"] == 0)))
-    print("source:", dict(Counter(l["source"] for l in leads if l["lead_index"] == 0)))
-    print("event:", dict(Counter(l["event_type"] for l in leads if l["lead_index"] == 0)))
+    print("status:", dict(Counter(lead["status"] for lead in leads if lead["lead_index"] == 0)))
+    print("source:", dict(Counter(lead["source"] for lead in leads if lead["lead_index"] == 0)))
+    print("event:", dict(Counter(lead["event_type"] for lead in leads if lead["lead_index"] == 0)))
     print("tags:", dict(tags.most_common()))
 
 

@@ -23,8 +23,8 @@ def data(tmp_path_factory):
     out = tmp_path_factory.mktemp("data")
     subprocess.run([sys.executable, str(ROOT / "generate_inbox.py"), "--threads", "200", "--seed", "7",
                     "--out", str(out)], check=True, capture_output=True)
-    threads = [json.loads(l) for l in (out / "threads.jsonl").read_text(encoding="utf-8").splitlines()]
-    leads = [json.loads(l) for l in (out / "ground_truth_leads.jsonl").read_text(encoding="utf-8").splitlines()]
+    threads = [json.loads(line) for line in (out / "threads.jsonl").read_text(encoding="utf-8").splitlines()]
+    leads = [json.loads(line) for line in (out / "ground_truth_leads.jsonl").read_text(encoding="utf-8").splitlines()]
     return out, threads, leads
 
 
@@ -43,7 +43,7 @@ def test_mbox_has_every_message(data):
 
 def test_every_thread_has_a_lead(data):
     _, threads, leads = data
-    assert {t["thread_id"] for t in threads} == {l["thread_id"] for l in leads}
+    assert {t["thread_id"] for t in threads} == {line["thread_id"] for line in leads}
 
 
 def test_quoted_price_appears_in_thread(data):
@@ -139,5 +139,5 @@ def test_rehearsal_dinner_is_the_night_before(data):
         by_thread[lead["thread_id"]].append(lead)
     for pair in by_thread.values():
         if len(pair) == 2 and pair[1]["event_type"] == "rehearsal_dinner" and "date_changed" not in pair[0]["tags"]:
-            d0, d1 = (datetime.fromisoformat(l["event_date"]) for l in pair)
+            d0, d1 = (datetime.fromisoformat(line["event_date"]) for line in pair)
             assert (d0 - d1).days == 1, pair[0]["thread_id"]

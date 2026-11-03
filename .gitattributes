@@ -1,0 +1,3 @@
+# Keep test data byte-identical on every OS. Without this, git on Windows may rewrite line endings
+# in the .mbox and .jsonl files, and the tests would be checking different data than on a Mac.
+synthetic_inbox/data/** -text

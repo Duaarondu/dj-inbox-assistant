@@ -11,3 +11,12 @@ dev = ["pytest>=8"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests", "synthetic_inbox/tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F: real errors (syntax, undefined or unused names)   I: import order
+# B: likely bugs (mutable defaults, etc.)                UP: modern Python syntax
+select = ["E", "F", "I", "B", "UP"]

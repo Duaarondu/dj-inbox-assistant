@@ -12,7 +12,7 @@ import email
 import hashlib
 import mailbox
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from email import policy
 from email.message import EmailMessage
 from email.utils import getaddresses, parseaddr, parsedate_to_datetime
@@ -67,7 +67,7 @@ def _parse(msg: EmailMessage, company: CompanyConfig) -> dict:
     subject = str(msg.get("Subject", "")).strip()
     # The "client address" pairs a reply with its thread when headers are missing.
     if company.is_form(sender_email) and contacts.emails:
-        client_address = contacts.emails[0]  # the couple's own address from the form fields, not noreply@
+        client_address = contacts.emails[0]   # the couple's own address from the form fields, not noreply@
     elif role == "client":
         client_address = sender_email
     else:
@@ -109,9 +109,9 @@ def _body_text(msg: EmailMessage) -> str:
 def _date(msg: EmailMessage) -> datetime:
     try:
         d = parsedate_to_datetime(str(msg.get("Date")))
-        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+        return d if d.tzinfo else d.replace(tzinfo=UTC)
     except (TypeError, ValueError):
-        return datetime(1970, 1, 1, tzinfo=timezone.utc)  # undated mail sorts first instead of crashing
+        return datetime(1970, 1, 1, tzinfo=UTC)  # undated mail sorts first instead of crashing
 
 
 class _TextOnly(HTMLParser):

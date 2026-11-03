@@ -1,0 +1,45 @@
+# .github/workflows/ci.yml
+# Runs on every push and pull request: lint once, then the tests on Linux and Windows.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read            # CI only reads the code; it can't push or change settings
+
+concurrency:                # a newer push to the same branch cancels the older run
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip                                # reuse downloaded packages between runs
+          cache-dependency-path: requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: ruff check .
+
+  test:
+    strategy:
+      fail-fast: false                              # if Windows fails, still finish Linux
+      matrix:
+        os: [ubuntu-latest, windows-latest]         # Linux = the server; Windows = catches today's kind of bug
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest -q

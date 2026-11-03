@@ -45,16 +45,16 @@ def strip_quoted(body: str) -> str:
 
 
 def _is_signature_block(block: list[str]) -> bool:
-    lines = [l.strip() for l in block if l.strip()]
+    lines = [line.strip() for line in block if line.strip()]
     if not lines:
         return False
-    if all(SENT_FROM.match(l) for l in lines):
+    if all(SENT_FROM.match(line) for line in lines):
         return True
     if len(lines) <= 3 and CLOSING.match(lines[0]):                      # "Thanks!\nJenna"
         return True
-    has_contact = any(PHONE_RE.search(l) or EMAIL_RE.search(l) or DOMAIN_RE.search(l) for l in lines)
-    short = all(len(l) <= 45 for l in lines)
-    no_sentences = not any(l.endswith(("?", ".")) and len(l.split()) > 4 for l in lines)
+    has_contact = any(PHONE_RE.search(line) or EMAIL_RE.search(line) or DOMAIN_RE.search(line) for line in lines)
+    short = all(len(line) <= 45 for line in lines)
+    no_sentences = not any(line.endswith(("?", ".")) and len(line.split()) > 4 for line in lines)
     return len(lines) <= 5 and has_contact and short and no_sentences  # "Mike Russo\nCo.\n(516)...\nsite"
 
 
