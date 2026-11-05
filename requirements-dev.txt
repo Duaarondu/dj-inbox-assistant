@@ -1,5 +1,9 @@
 # Exact versions, so CI and every laptop test the same thing. Upgrade on purpose, not by accident.
 pydantic==2.14.2
+anthropic==2.5.0
+python-dotenv==1.2.4
+google-genai==2.34.0
+numpy==2.5.4
 pytest==9.2.0
 ruff==0.16.9
 tzdata==2026.6 ; sys_platform == "win32"

@@ -51,7 +51,8 @@ DEFER_PHRASES = ["not found", "couldn't find", "could not find", "no record", "d
 # How a status fact can be stated in an answer. Careful: "not booked" contains "booked".
 STATUS_WORDS = {
     "booked": ["booked", "paid the deposit", "deposit paid"],
-    "lost": ["declined", "passed", "went with", "not going ahead", "decided not", "lost"],
+    "lost": ["declined", "passed", "went with", "not going ahead", "decided not", "lost", "postpone",
+             "did not book", "didn't book"],
     "cold": ["cold", "no reply", "hasn't replied", "went quiet"],
     "awaiting_reply": ["waiting on us", "owe them a reply", "awaiting our reply", "haven't replied"],
     "waiting_on_client": ["waiting on them", "waiting to hear back", "waiting on the client"],

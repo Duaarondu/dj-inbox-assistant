@@ -68,6 +68,14 @@ def test_status_lost():
     assert score_answer("They declined; it was over their budget.", lost).correct
 
 
+def test_status_lost_postponed():
+    """Regression, first baseline run (Nov 5): a correct answer was marked wrong."""
+    lost = q(type="status", expected_facts=[{"kind": "text", "value": "lost"}])
+    answer = ("No, Daniel Kowalski did not book us; they decided to postpone the event for now, "
+              "as stated in thread t121.")
+    assert score_answer(answer, lost).correct
+
+
 def test_defer_is_correct_only_when_expected():
     missing = q(type="not_in_inbox", should_defer=True, must_not_contain=["$"])
     assert score_answer("I couldn't find anything about the Garcias in your emails.", missing).correct
