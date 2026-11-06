@@ -23,6 +23,8 @@ from pathlib import Path
 
 import numpy as np
 
+from dj_inbox.gcp import is_retryable
+
 MODEL = "gemini-embedding-2"
 DIM = 768          # Gemini Embedding 2 allows smaller vectors (Matryoshka); 768 keeps files and pgvector small
 WORKERS = 8        # requests in flight at once
@@ -58,7 +60,7 @@ class Embedder:
         return np.array([self.cache[_key(t, task)] for t in texts], dtype=np.float32)
 
     def _one(self, text: str, task: str, tries: int = 6) -> list[float]:
-        """Embed one text; wait and retry on rate limits (HTTP 429)."""
+        """Embed one text; wait and retry on rate limits, server hiccups and timeouts."""
         from google.genai import types
         for attempt in range(1, tries + 1):
             try:
@@ -70,7 +72,7 @@ class Embedder:
                     raise ValueError(f"expected 1 vector, got {len(resp.embeddings)}")
                 return resp.embeddings[0].values
             except Exception as e:
-                if getattr(e, "code", None) != 429 or attempt == tries:
+                if not is_retryable(e) or attempt == tries:
                     raise
                 self.sleep(5 * attempt)
         raise AssertionError("unreachable")

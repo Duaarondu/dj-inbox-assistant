@@ -79,3 +79,12 @@ def test_rows_saved_and_baseline_rescored(tmp_path, monkeypatch):
 def test_budget_guard(tmp_path):
     rows = run_rag.run(FakeModel(), Embedder(FakeGenai(), cache_dir=tmp_path), THREADS, [Q, Q], k=1, max_cost=0)
     assert rows == []
+
+
+def test_rescore_uses_todays_key(tmp_path):
+    from evals.rescore import rescore_file
+    f = tmp_path / "rag-x.jsonl"
+    f.write_text(json.dumps({"id": "price-01", "type": "price", "answer": "We quoted $1,895.", "correct": False,
+                             "latency_s": 1.0, "cost_usd": 0.001, "cache_read_tokens": 0}) + "\n")
+    summary, changed = rescore_file(f, {"price-01": Q})
+    assert summary["correct"] == 1 and changed == 1

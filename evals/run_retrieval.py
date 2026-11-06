@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from dj_inbox.gcp import gemini_client
 from dj_inbox.ingest import CompanyConfig, read_mbox
 from dj_inbox.rag.chunk import chunk_inbox
 from dj_inbox.rag.embed import Embedder
@@ -69,11 +69,7 @@ def main() -> None:
     ap.add_argument("--k", type=int, default=5)
     args = ap.parse_args()
 
-    from dotenv import load_dotenv
-    from google import genai
-    load_dotenv(ROOT / ".env")
-    client = genai.Client(enterprise=True, project=os.environ["GOOGLE_CLOUD_PROJECT"],
-                          location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"))
+    client = gemini_client()
 
     threads = read_mbox(INBOX, CompanyConfig(domains=["northshoresound.example"]))
     chunks = chunk_inbox(threads)

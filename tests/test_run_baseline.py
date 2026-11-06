@@ -121,6 +121,28 @@ def test_rate_limit_is_retried_then_succeeds():
     assert waits == [15, 30]
 
 
+def test_timeouts_and_server_errors_are_retried():
+    """Regression (Nov 5): the laptop slept mid-run and a dead connection hung forever. Now it times out and retries."""
+    waits = []
+
+    class ReadTimeout(Exception):
+        pass
+
+    class ServerError(Exception):
+        code = 503
+
+    errors = [ReadTimeout(), ServerError()]
+
+    class Flaky:
+        def ask(self, inbox, question):
+            if errors:
+                raise errors.pop(0)
+            return "ok", Usage()
+
+    assert ask_with_retry(Flaky(), "x", "q", sleep=waits.append) == ("ok", Usage())
+    assert waits == [15, 30]
+
+
 def test_other_errors_are_not_retried():
     class Broken:
         def ask(self, inbox, question):

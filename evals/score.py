@@ -56,6 +56,9 @@ STATUS_WORDS = {
     "cold": ["cold", "no reply", "hasn't replied", "went quiet"],
     "awaiting_reply": ["waiting on us", "owe them a reply", "awaiting our reply", "haven't replied"],
     "waiting_on_client": ["waiting on them", "waiting to hear back", "waiting on the client"],
+    # For "did they book?" when the answer is no, but they didn't decline either (still open or cold).
+    "not_booked": ["did not book", "didn't book", "not booked", "hasn't booked", "has not booked",
+                   "haven't booked", "no deposit", "not yet booked"],
 }
 
 

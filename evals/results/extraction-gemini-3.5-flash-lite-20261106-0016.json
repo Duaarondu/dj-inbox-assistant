@@ -1,0 +1,180 @@
+{
+ "model": "gemini-3.5-flash-lite",
+ "prompt_version": "v2",
+ "cost_usd": 0.1401354,
+ "seconds": 25.46497149998322,
+ "leads": 209,
+ "accuracy": {
+  "event_type": 1.0,
+  "event_date": 0.9952153110047847,
+  "venue": 1.0,
+  "venue_town": 0.9367816091954023,
+  "guest_count": 1.0,
+  "hours": 0.9904306220095693,
+  "budget": 0.9665071770334929,
+  "package_quoted": 1.0,
+  "addons_quoted": 0.9952153110047847,
+  "quoted_price": 1.0,
+  "status": 0.9808612440191388
+ },
+ "scored": {
+  "event_type": 209,
+  "event_date": 209,
+  "venue": 209,
+  "venue_town": 174,
+  "guest_count": 209,
+  "hours": 209,
+  "budget": 209,
+  "package_quoted": 209,
+  "addons_quoted": 209,
+  "quoted_price": 209,
+  "status": 209
+ },
+ "misses": {
+  "venue_town": [
+   {
+    "lead": "t064#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t117#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t041#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t187#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t022#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t012#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t071#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t070#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t110#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t118#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t194#0",
+    "got": null,
+    "want": "Bellmore"
+   }
+  ],
+  "budget": [
+   {
+    "lead": "t102#0",
+    "got": null,
+    "want": 1300
+   },
+   {
+    "lead": "t094#0",
+    "got": null,
+    "want": 1100
+   },
+   {
+    "lead": "t047#0",
+    "got": null,
+    "want": 900
+   },
+   {
+    "lead": "t088#0",
+    "got": null,
+    "want": 2000
+   },
+   {
+    "lead": "t190#0",
+    "got": null,
+    "want": 1400
+   },
+   {
+    "lead": "t076#0",
+    "got": null,
+    "want": 1300
+   },
+   {
+    "lead": "t122#0",
+    "got": null,
+    "want": 1200
+   }
+  ],
+  "hours": [
+   {
+    "lead": "t155#0",
+    "got": 5,
+    "want": 4
+   },
+   {
+    "lead": "t139#0",
+    "got": 6,
+    "want": 5
+   }
+  ],
+  "status": [
+   {
+    "lead": "t001#1",
+    "got": "cold",
+    "want": "booked"
+   },
+   {
+    "lead": "t042#1",
+    "got": "cold",
+    "want": "booked"
+   },
+   {
+    "lead": "t061#1",
+    "got": "cold",
+    "want": "booked"
+   },
+   {
+    "lead": "t086#1",
+    "got": "cold",
+    "want": "booked"
+   }
+  ],
+  "addons_quoted": [
+   {
+    "lead": "t051#0",
+    "got": [
+     "dancing on clouds"
+    ],
+    "want": []
+   }
+  ],
+  "event_date": [
+   {
+    "lead": "t099#0",
+    "got": "2026-04-03",
+    "want": "2027-04-03"
+   }
+  ]
+ },
+ "lead_count_correct": "200/200"
+}
