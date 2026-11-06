@@ -78,6 +78,14 @@ def test_wrong_fields_are_reported(threads, truth):
     assert result["accuracy"]["quoted_price"] == 0 and result["accuracy"]["venue"] == 1
 
 
+def test_unstated_towns_are_not_scored(threads, truth):
+    from evals.run_extraction import unstated_towns
+    skip = unstated_towns(threads, truth)
+    assert 20 < len(skip) < len(truth)                       # website forms name the venue, not the town
+    text = {t.thread_id: t.clean_text() for t in threads}
+    assert all(r["venue_town"] not in text[r["thread_id"]] for r in truth if (r["thread_id"], r["lead_index"]) in skip)
+
+
 def test_status_is_computed_not_extracted(threads):
     t = next(t for t in threads if t.messages[-1].sender_role == "client")
     open_lead = ExtractedLead(event_type="wedding", outcome="open")

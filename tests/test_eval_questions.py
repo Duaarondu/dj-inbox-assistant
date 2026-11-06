@@ -71,6 +71,8 @@ def test_expected_facts_match_ground_truth(questions, leads):
                 assert fact["value"] == lead[field[fact["kind"]]], q["id"]
             elif fact["kind"] == "number":
                 assert fact["value"] == lead["guest_count"], q["id"]
+            elif fact["value"] == "not_booked":
+                assert lead["status"] not in ("booked", "lost"), q["id"]
             else:
                 assert fact["value"] == lead["status"], q["id"]
 

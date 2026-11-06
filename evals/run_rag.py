@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
+from dj_inbox.gcp import gemini_client
 from dj_inbox.ingest import CompanyConfig, EmailThread, read_mbox
 from dj_inbox.rag.chunk import chunk_inbox
 from dj_inbox.rag.embed import Embedder
@@ -99,9 +99,7 @@ def main() -> None:
     args = ap.parse_args()
 
     backend = make_backend(args.model)        # loads .env; Gemini or Claude
-    from google import genai
-    embed_client = genai.Client(enterprise=True, project=os.environ["GOOGLE_CLOUD_PROJECT"],
-                                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"))
+    embed_client = gemini_client()
 
     threads = read_mbox(INBOX, CompanyConfig(domains=["northshoresound.example"]))
     with QUESTIONS.open(encoding="utf-8") as fh:

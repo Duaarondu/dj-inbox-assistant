@@ -22,9 +22,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from dj_inbox.gcp import is_retryable
 from dj_inbox.ingest import CompanyConfig, EmailThread
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
+# v2 (Nov 6): sharper field definitions after v1's misses: hours = what the client asked for (not the package's
+# hours), add-ons exclude fees/surcharges, a school is a venue, workplace parties are corporate, and a date
+# given without a year takes the year from our reply.
 COLD_AFTER_DAYS = 21
 WORKERS = 8
 
@@ -35,15 +39,21 @@ EventType = Literal["wedding", "sweet16", "mitzvah", "corporate", "birthday", "s
 class ExtractedLead(BaseModel):
     """One event a client asked about. Leave a field null if the emails don't say."""
     event_type: EventType
-    event_date: str | None = Field(None, description="YYYY-MM-DD, the LATEST date if it changed")
-    venue: str | None = Field(None, description="Venue name, or 'Private residence' for a home")
-    venue_town: str | None = None
+    event_date: str | None = Field(None, description="YYYY-MM-DD, the LATEST date if it changed. If the client "
+                                   "gave no year, use the year from our reply")
+    venue: str | None = Field(None, description="Where the event happens: venue name; for a school event the "
+                              "school's name; 'Private residence' for a home")
+    venue_town: str | None = Field(None, description="Town, only if the emails state it")
     guest_count: int | None = None
-    hours: int | None = Field(None, description="Hours of music requested")
-    budget: int | None = Field(None, description="Client's stated budget in whole dollars")
+    hours: int | None = Field(None, description="Hours of music the CLIENT asked for (not the hours included in "
+                              "the package we recommended)")
+    budget: int | None = Field(None, description="Client's stated budget in whole dollars, including a "
+                               "'Budget:' line in a website form")
     package_quoted: Literal["Essential", "Signature", "Premier"] | None = Field(
         None, description="Package in our LATEST quote for this event")
-    addons_quoted: list[str] = Field(default_factory=list, description="Add-ons in our latest quote, lowercase")
+    addons_quoted: list[str] = Field(default_factory=list, description="Optional extras in our latest quote, "
+                                     "lowercase (e.g. uplighting, photo booth). NOT fees or surcharges such as "
+                                     "travel fees or holiday surcharges")
     quoted_price: int | None = Field(None, description="TOTAL of our latest quote for this event, whole dollars")
     outcome: Literal["booked", "lost", "open"] = Field(
         description="booked = client paid the deposit; lost = client declined or postponed; open = neither")
@@ -57,6 +67,8 @@ INSTRUCTIONS = """You extract lead records from one email thread between a DJ co
 and a client.
 Return one lead per event the client asked about (usually one; a second event such as an engagement party or
 rehearsal dinner gets its own lead, listed after the main event).
+- event_type: corporate = any company or workplace event (holiday party, summer party, company anniversary);
+  school_dance = any school event; other only if nothing fits.
 - Use only what the emails say. Unknown -> null.
 - If a detail changed during the thread (new date, upgraded package, re-quote), use the LATEST version.
 - quoted_price is the TOTAL of our latest quote for that event (including add-ons, surcharges, travel).
@@ -100,7 +112,7 @@ def extract_all(client, model: str, threads: list[EmailThread], cache_dir: Path 
             try:
                 return extract_thread(client, model, t)
             except Exception as e:
-                if getattr(e, "code", None) != 429 or attempt == 6:
+                if not is_retryable(e) or attempt == 6:
                     raise
                 sleep(10 * attempt)
         raise AssertionError("unreachable")

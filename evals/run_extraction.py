@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from dj_inbox.extract.extract import ThreadLeads, extract_all, source, status
+from dj_inbox.extract.extract import PROMPT_VERSION, ThreadLeads, extract_all, source, status
+from dj_inbox.gcp import gemini_client
 from dj_inbox.ingest import CompanyConfig, EmailThread, read_mbox
 from evals.run_baseline import PRICES
 
@@ -61,14 +61,26 @@ def same(field: str, got, want) -> bool:
     return got == want
 
 
-def compare(rows: list[dict], truth: list[dict]) -> dict:
-    """Per-field accuracy over leads matched by (thread, position); plus lead-count accuracy per thread."""
+def unstated_towns(threads: list[EmailThread], truth: list[dict]) -> set[tuple[str, int]]:
+    """Leads whose true town never appears in their emails (website forms give only the venue name).
+    Nobody could extract those, so they're left out of the venue_town score (found Nov 6: 48 'misses')."""
+    text = {t.thread_id: t.clean_text() for t in threads}
+    return {(r["thread_id"], r["lead_index"]) for r in truth
+            if r["venue_town"] and r["venue_town"] not in text[r["thread_id"]]}
+
+
+def compare(rows: list[dict], truth: list[dict], unstated: set[tuple[str, int]] = frozenset()) -> dict:
+    """Per-field accuracy over leads matched by (thread, position); plus lead-count accuracy per thread.
+    `unstated` leads are skipped for venue_town only."""
     got = {(r["thread_id"], r["lead_index"]): r for r in rows}
     want = {(r["thread_id"], r["lead_index"]): r for r in truth}
-    hits, misses = defaultdict(int), defaultdict(list)
+    hits, misses, scored = defaultdict(int), defaultdict(list), defaultdict(int)
     for key, w in want.items():
         g = got.get(key)
         for f in FIELDS:
+            if f == "venue_town" and key in unstated:
+                continue
+            scored[f] += 1
             if g is not None and same(f, g.get(f), w.get(f)):
                 hits[f] += 1
             else:
@@ -80,7 +92,8 @@ def compare(rows: list[dict], truth: list[dict]) -> dict:
     for t, _ in want:
         per_thread[t][1] += 1
     count_ok = sum(a == b for a, b in per_thread.values())
-    return {"leads": len(want), "accuracy": {f: hits[f] / len(want) for f in FIELDS}, "misses": dict(misses),
+    return {"leads": len(want), "accuracy": {f: hits[f] / scored[f] for f in FIELDS if scored[f]},
+            "scored": dict(scored), "misses": dict(misses),
             "lead_count_correct": f"{count_ok}/{len(per_thread)}"}
 
 
@@ -94,11 +107,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="only the first N threads")
     args = ap.parse_args()
 
-    from dotenv import load_dotenv
-    from google import genai
-    load_dotenv(ROOT / ".env")
-    client = genai.Client(enterprise=True, project=os.environ["GOOGLE_CLOUD_PROJECT"],
-                          location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"))
+    client = gemini_client()
 
     threads = read_mbox(DATA / "inbox.mbox", COMPANY)[: args.limit]
     ids = {t.thread_id for t in threads}
@@ -114,20 +123,21 @@ def main() -> None:
     LEADS_OUT.parent.mkdir(parents=True, exist_ok=True)
     LEADS_OUT.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
 
-    result = compare(rows, truth)
+    result = compare(rows, truth, unstated_towns(threads, truth))
     print(f"{len(threads)} threads, {calls} API calls, {secs:.1f}s, ${spent:.4f} "
           f"({usage.input:,} in / {usage.output:,} out tokens) | "
           f"leads per thread right: {result['lead_count_correct']}")
     print("field accuracy over", result["leads"], "leads:")
     for f, a in result["accuracy"].items():
-        print(f"  {f:<15} {a:6.1%}   {len(result['misses'].get(f, []))} wrong")
+        print(f"  {f:<15} {a:6.1%}   {len(result['misses'].get(f, []))} wrong of {result['scored'][f]}")
     print("counting questions answered from the extracted leads (code, not the model):")
     for qid, got, want in counting(rows, truth):
         print(f"  {'OK' if got == want else 'XX'} {qid}  got {got}, truth {want}")
 
     RESULTS.mkdir(exist_ok=True)
     out = RESULTS / f"extraction-{args.model}-{datetime.now():%Y%m%d-%H%M}.json"
-    out.write_text(json.dumps({"model": args.model, "cost_usd": spent, "seconds": secs, **result}, indent=1,
+    summary = {"model": args.model, "prompt_version": PROMPT_VERSION, "cost_usd": spent, "seconds": secs, **result}
+    out.write_text(json.dumps(summary, indent=1,
                               default=str), encoding="utf-8")
     print(f"details (every wrong field) -> {out}")
 

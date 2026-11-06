@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import statistics
 import time
 from collections import Counter, defaultdict
@@ -32,6 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from dj_inbox.gcp import gemini_client, is_retryable
 from dj_inbox.ingest import CompanyConfig, EmailThread, read_mbox
 from evals.score import Question, score_answer
 
@@ -161,28 +161,19 @@ def make_backend(model: str):
     if model.startswith("claude"):
         import anthropic
         return ClaudeBackend(anthropic.Anthropic(), model)  # reads ANTHROPIC_API_KEY
-    from google import genai
-    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    if not project:
-        raise SystemExit("Set GOOGLE_CLOUD_PROJECT in .env (your Google Cloud project id).")
-    client = genai.Client(enterprise=True, project=project, location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"))
-    return GeminiBackend(client, model)
-
-
-def is_rate_limit(e: Exception) -> bool:
-    return getattr(e, "code", None) == 429 or getattr(e, "status_code", None) == 429
+    return GeminiBackend(gemini_client(), model)
 
 
 def ask_with_retry(backend, inbox: str, question: str, sleep=time.sleep, tries: int = 6):
-    """Rate limits are temporary: wait 15s, 30s, 45s, ... and try again. Any other error stops the run."""
+    """Rate limits, server hiccups and timeouts are temporary: wait 15s, 30s, ... and retry. Other errors stop."""
     for attempt in range(1, tries + 1):
         try:
             return backend.ask(inbox, question)
         except Exception as e:
-            if not is_rate_limit(e) or attempt == tries:
+            if not is_retryable(e) or attempt == tries:
                 raise
             wait = 15 * attempt
-            print(f"   rate limited (429); waiting {wait}s, attempt {attempt}/{tries}")
+            print(f"   temporary error ({type(e).__name__}); waiting {wait}s, attempt {attempt}/{tries}")
             sleep(wait)
 
 
