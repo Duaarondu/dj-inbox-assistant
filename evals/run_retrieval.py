@@ -4,7 +4,9 @@
     python -m evals.run_retrieval            # recall@5 over every question that has a gold email
     python -m evals.run_retrieval --k 10     # how much does looking at 10 instead of 5 help?
 
-For each question: embed it, find the k most similar chunks, and check whether the gold email is among them.
+For each question: embed it, find the most similar emails, and keep the first k DIFFERENT threads they belong to
+("small-to-big": search small units, return the whole conversation). Then check whether the gold email is in them.
+v1 returned single emails: 41% recall@5, but the right thread was found 95% of the time (Nov 5).
 If retrieval misses, the answering model never even sees the right email, so this number caps the whole system.
 Count and not-in-inbox questions have no gold email and are skipped here.
 
@@ -33,18 +35,26 @@ RESULTS = Path(__file__).resolve().parent / "results"
 CACHE = ROOT / "data" / "embeddings"           # git-ignored (data/ is generated)
 
 
-def evaluate(embedder: Embedder, chunks, questions: list[Question], k: int) -> list[dict]:
+def evaluate(embedder: Embedder, chunks, threads: dict, questions: list[Question], k: int) -> list[dict]:
+    """threads: {thread_id: EmailThread}, used to return whole conversations."""
     matrix = embedder.embed([c.text for c in chunks], "RETRIEVAL_DOCUMENT")
     scored = [q for q in questions if q.gold_evidence]
     qvecs = embedder.embed([q.question for q in scored], "RETRIEVAL_QUERY")
     rows = []
     for q, qvec in zip(scored, qvecs, strict=True):
-        top = cosine_top_k(qvec, matrix, k)
-        retrieved = [(chunks[i].thread_id, chunks[i].text) for i in top]
+        top = cosine_top_k(qvec, matrix, 50)
+        thread_ids = []
+        for i in top:
+            tid = chunks[i].thread_id
+            if tid not in thread_ids:
+                thread_ids.append(tid)
+            if len(thread_ids) == k:
+                break
+        retrieved = [(tid, threads[tid].clean_text()) for tid in thread_ids]
         rows.append({"id": q.id, "type": q.type, "question": q.question,
                      "recall": recall_at_k(retrieved, q.gold_evidence, k),
                      "gold_threads": sorted({g.thread_id for g in q.gold_evidence}),
-                     "retrieved": [chunks[i].chunk_id for i in top]})
+                     "retrieved": thread_ids})
     return rows
 
 
@@ -79,7 +89,8 @@ def main() -> None:
 
     start = time.perf_counter()
     embedder = Embedder(client, cache_dir=CACHE)
-    rows = evaluate(embedder, chunks, questions, args.k)
+    threads_by_id = {t.thread_id: t for t in threads}
+    rows = evaluate(embedder, chunks, threads_by_id, questions, args.k)
     print(f"{len(chunks)} chunks, {embedder.calls} embedding API calls, {time.perf_counter() - start:.1f}s")
     print(report(rows, args.k))
 
