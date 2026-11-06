@@ -1,0 +1,468 @@
+{
+ "model": "gemini-3.5-flash-lite",
+ "cost_usd": 0.1298229,
+ "seconds": 24.56032358307857,
+ "leads": 209,
+ "accuracy": {
+  "event_type": 0.9856459330143541,
+  "event_date": 0.9952153110047847,
+  "venue": 0.9760765550239234,
+  "venue_town": 0.7703349282296651,
+  "guest_count": 1.0,
+  "hours": 0.9473684210526315,
+  "budget": 0.9665071770334929,
+  "package_quoted": 1.0,
+  "addons_quoted": 0.9856459330143541,
+  "quoted_price": 1.0,
+  "status": 0.9808612440191388
+ },
+ "misses": {
+  "venue_town": [
+   {
+    "lead": "t026#0",
+    "got": null,
+    "want": "Old Westbury"
+   },
+   {
+    "lead": "t064#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t142#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t046#0",
+    "got": null,
+    "want": "Old Westbury"
+   },
+   {
+    "lead": "t027#0",
+    "got": null,
+    "want": "Merrick"
+   },
+   {
+    "lead": "t180#0",
+    "got": null,
+    "want": "Huntington"
+   },
+   {
+    "lead": "t115#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t104#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t117#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t041#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t093#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t116#0",
+    "got": null,
+    "want": "Merrick"
+   },
+   {
+    "lead": "t106#0",
+    "got": null,
+    "want": "Old Westbury"
+   },
+   {
+    "lead": "t187#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t139#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t009#0",
+    "got": null,
+    "want": "Old Westbury"
+   },
+   {
+    "lead": "t101#0",
+    "got": null,
+    "want": "Syosset"
+   },
+   {
+    "lead": "t022#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t044#0",
+    "got": null,
+    "want": "Port Jefferson"
+   },
+   {
+    "lead": "t013#0",
+    "got": null,
+    "want": "Port Jefferson"
+   },
+   {
+    "lead": "t147#0",
+    "got": null,
+    "want": "Old Westbury"
+   },
+   {
+    "lead": "t012#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t179#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t059#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t016#0",
+    "got": null,
+    "want": "Syosset"
+   },
+   {
+    "lead": "t165#0",
+    "got": null,
+    "want": "Huntington"
+   },
+   {
+    "lead": "t120#0",
+    "got": null,
+    "want": "Huntington"
+   },
+   {
+    "lead": "t140#0",
+    "got": null,
+    "want": "Syosset"
+   },
+   {
+    "lead": "t071#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t151#0",
+    "got": null,
+    "want": "Port Jefferson"
+   },
+   {
+    "lead": "t007#0",
+    "got": null,
+    "want": "Merrick"
+   },
+   {
+    "lead": "t167#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t052#0",
+    "got": null,
+    "want": "Melville"
+   },
+   {
+    "lead": "t020#0",
+    "got": null,
+    "want": "Brooklyn"
+   },
+   {
+    "lead": "t173#0",
+    "got": null,
+    "want": "Brooklyn"
+   },
+   {
+    "lead": "t045#0",
+    "got": null,
+    "want": "Old Westbury"
+   },
+   {
+    "lead": "t135#0",
+    "got": null,
+    "want": "Merrick"
+   },
+   {
+    "lead": "t070#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t192#0",
+    "got": null,
+    "want": "Oyster Bay"
+   },
+   {
+    "lead": "t110#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t118#0",
+    "got": null,
+    "want": "Bellmore"
+   },
+   {
+    "lead": "t181#0",
+    "got": null,
+    "want": "Old Westbury"
+   },
+   {
+    "lead": "t182#0",
+    "got": null,
+    "want": "Old Westbury"
+   },
+   {
+    "lead": "t112#0",
+    "got": null,
+    "want": "Huntington"
+   },
+   {
+    "lead": "t168#0",
+    "got": null,
+    "want": "Huntington"
+   },
+   {
+    "lead": "t080#0",
+    "got": null,
+    "want": "Merrick"
+   },
+   {
+    "lead": "t037#0",
+    "got": null,
+    "want": "Syosset"
+   },
+   {
+    "lead": "t194#0",
+    "got": null,
+    "want": "Bellmore"
+   }
+  ],
+  "event_type": [
+   {
+    "lead": "t104#0",
+    "got": "other",
+    "want": "corporate"
+   },
+   {
+    "lead": "t140#0",
+    "got": "other",
+    "want": "corporate"
+   },
+   {
+    "lead": "t052#0",
+    "got": "other",
+    "want": "corporate"
+   }
+  ],
+  "venue": [
+   {
+    "lead": "t030#0",
+    "got": null,
+    "want": "Eastbrook High School"
+   },
+   {
+    "lead": "t039#0",
+    "got": null,
+    "want": "Eastbrook High School"
+   },
+   {
+    "lead": "t114#0",
+    "got": null,
+    "want": "Eastbrook High School"
+   },
+   {
+    "lead": "t096#0",
+    "got": null,
+    "want": "Eastbrook High School"
+   },
+   {
+    "lead": "t153#0",
+    "got": null,
+    "want": "Eastbrook High School"
+   }
+  ],
+  "budget": [
+   {
+    "lead": "t102#0",
+    "got": null,
+    "want": 1300
+   },
+   {
+    "lead": "t094#0",
+    "got": null,
+    "want": 1100
+   },
+   {
+    "lead": "t047#0",
+    "got": null,
+    "want": 900
+   },
+   {
+    "lead": "t088#0",
+    "got": null,
+    "want": 2000
+   },
+   {
+    "lead": "t190#0",
+    "got": null,
+    "want": 1400
+   },
+   {
+    "lead": "t076#0",
+    "got": null,
+    "want": 1300
+   },
+   {
+    "lead": "t122#0",
+    "got": null,
+    "want": 1200
+   }
+  ],
+  "hours": [
+   {
+    "lead": "t155#0",
+    "got": 5,
+    "want": 4
+   },
+   {
+    "lead": "t139#0",
+    "got": 6,
+    "want": 5
+   },
+   {
+    "lead": "t001#1",
+    "got": 4,
+    "want": 3
+   },
+   {
+    "lead": "t009#0",
+    "got": 5,
+    "want": 4
+   },
+   {
+    "lead": "t179#0",
+    "got": 6,
+    "want": 4
+   },
+   {
+    "lead": "t148#0",
+    "got": 6,
+    "want": 5
+   },
+   {
+    "lead": "t063#0",
+    "got": 6,
+    "want": 5
+   },
+   {
+    "lead": "t144#0",
+    "got": 6,
+    "want": 5
+   },
+   {
+    "lead": "t076#0",
+    "got": 5,
+    "want": 4
+   },
+   {
+    "lead": "t195#0",
+    "got": 5,
+    "want": 4
+   },
+   {
+    "lead": "t184#0",
+    "got": 5,
+    "want": 4
+   }
+  ],
+  "addons_quoted": [
+   {
+    "lead": "t138#0",
+    "got": [
+     "photo booth",
+     "monogram projection",
+     "travel fee"
+    ],
+    "want": [
+     "photo booth",
+     "monogram projection"
+    ]
+   },
+   {
+    "lead": "t087#0",
+    "got": [
+     "uplighting",
+     "photo booth",
+     "travel fee"
+    ],
+    "want": [
+     "uplighting",
+     "photo booth"
+    ]
+   },
+   {
+    "lead": "t060#0",
+    "got": [
+     "monogram projection",
+     "july 4th surcharge",
+     "travel fee"
+    ],
+    "want": [
+     "monogram projection"
+    ]
+   }
+  ],
+  "status": [
+   {
+    "lead": "t001#1",
+    "got": "cold",
+    "want": "booked"
+   },
+   {
+    "lead": "t042#1",
+    "got": "cold",
+    "want": "booked"
+   },
+   {
+    "lead": "t061#1",
+    "got": "cold",
+    "want": "booked"
+   },
+   {
+    "lead": "t086#1",
+    "got": "cold",
+    "want": "booked"
+   }
+  ],
+  "event_date": [
+   {
+    "lead": "t099#0",
+    "got": "2026-04-03",
+    "want": "2027-04-03"
+   }
+  ]
+ },
+ "lead_count_correct": "200/200"
+}
