@@ -1,0 +1,41 @@
+{"id": "price-01", "type": "price", "question": "What did we quote for Nicole Chen's surprise 60th birthday party?", "recall": 1.0, "gold_threads": ["t190"], "retrieved": ["t190", "t069", "t075", "t137", "t068"]}
+{"id": "price-02", "type": "price", "question": "What did we quote for Jason Patel's company anniversary party?", "recall": 1.0, "gold_threads": ["t197"], "retrieved": ["t197", "t068", "t179", "t175", "t173"]}
+{"id": "price-03", "type": "price", "question": "What did we quote for Jenna Patel's 40th birthday party?", "recall": 1.0, "gold_threads": ["t089"], "retrieved": ["t089", "t180", "t082", "t156", "t150"]}
+{"id": "price-04", "type": "price", "question": "What did we quote for Emily Santos's wedding?", "recall": 1.0, "gold_threads": ["t053"], "retrieved": ["t053", "t068", "t073", "t072", "t010"]}
+{"id": "price-05", "type": "price", "question": "What did we quote for Omar Santos's wedding?", "recall": 0.0, "gold_threads": ["t128"], "retrieved": ["t152", "t053", "t073", "t068", "t005"]}
+{"id": "price-06", "type": "price", "question": "What did we quote for Victor Murphy's wedding?", "recall": 1.0, "gold_threads": ["t017"], "retrieved": ["t017", "t130", "t165", "t073", "t178"]}
+{"id": "price-07", "type": "price", "question": "What did we quote for Ashley Esposito's 8th grade dance?", "recall": 1.0, "gold_threads": ["t114"], "retrieved": ["t030", "t116", "t007", "t114", "t196"]}
+{"id": "price-08", "type": "price", "question": "What did we quote for Nicole O'Brien's wedding?", "recall": 1.0, "gold_threads": ["t123"], "retrieved": ["t123", "t073", "t186", "t190", "t067"]}
+{"id": "stale_price-01", "type": "stale_price", "question": "What did we quote for Rachel Nguyen's Sweet 16?", "recall": 1.0, "gold_threads": ["t054"], "retrieved": ["t081", "t054", "t078", "t029", "t090"]}
+{"id": "stale_price-02", "type": "stale_price", "question": "What did we quote for Olivia Patel's wedding?", "recall": 1.0, "gold_threads": ["t024"], "retrieved": ["t073", "t024", "t019", "t118", "t128"]}
+{"id": "stale_price-03", "type": "stale_price", "question": "What did we quote for Derek Shapiro's Sweet 16?", "recall": 1.0, "gold_threads": ["t088"], "retrieved": ["t088", "t131", "t078", "t122", "t041"]}
+{"id": "stale_price-04", "type": "stale_price", "question": "What did we quote for Jason Chen's company anniversary party?", "recall": 1.0, "gold_threads": ["t170"], "retrieved": ["t068", "t170", "t197", "t175", "t179"]}
+{"id": "stale_price-05", "type": "stale_price", "question": "What did we quote for Jenna Chen's wedding?", "recall": 1.0, "gold_threads": ["t159"], "retrieved": ["t169", "t159", "t019", "t200", "t073"]}
+{"id": "venue-01", "type": "venue", "question": "Where is Sean O'Brien's holiday party?", "recall": 1.0, "gold_threads": ["t008"], "retrieved": ["t008", "t142", "t173", "t157", "t113"]}
+{"id": "venue-02", "type": "venue", "question": "Where is Tyler Lopez's holiday party?", "recall": 1.0, "gold_threads": ["t028"], "retrieved": ["t028", "t008", "t067", "t109", "t161"]}
+{"id": "venue-03", "type": "venue", "question": "Where is Jenna Cohen's wedding?", "recall": 1.0, "gold_threads": ["t031"], "retrieved": ["t146", "t031", "t151", "t159", "t187"]}
+{"id": "venue-04", "type": "venue", "question": "Where is Ryan Rivera's wedding?", "recall": 1.0, "gold_threads": ["t099"], "retrieved": ["t099", "t163", "t014", "t146", "t103"]}
+{"id": "venue-05", "type": "venue", "question": "Where is Gabriela Brennan's 8th grade dance?", "recall": 1.0, "gold_threads": ["t080"], "retrieved": ["t080", "t116", "t030", "t039", "t007"]}
+{"id": "event_date-01", "type": "event_date", "question": "When is Brianna Santos's wedding?", "recall": 1.0, "gold_threads": ["t097"], "retrieved": ["t053", "t097", "t026", "t198", "t165"]}
+{"id": "event_date-02", "type": "event_date", "question": "When is Alyssa Esposito's Sweet 16?", "recall": 1.0, "gold_threads": ["t192"], "retrieved": ["t192", "t117", "t041", "t044", "t093"]}
+{"id": "event_date-03", "type": "event_date", "question": "When is Chris Walsh's wedding?", "recall": 1.0, "gold_threads": ["t119"], "retrieved": ["t147", "t013", "t119", "t151", "t112"]}
+{"id": "event_date-04", "type": "event_date", "question": "When is Marco Chen's wedding?", "recall": 1.0, "gold_threads": ["t167"], "retrieved": ["t167", "t021", "t011", "t026", "t129"]}
+{"id": "event_date-05", "type": "event_date", "question": "When is Olivia Lopez's wedding?", "recall": 1.0, "gold_threads": ["t136"], "retrieved": ["t067", "t136", "t020", "t026", "t156"]}
+{"id": "date_change-01", "type": "date_change", "question": "What's the current date for Ryan Russo's wedding? Did it change?", "recall": 1.0, "gold_threads": ["t134"], "retrieved": ["t134", "t187", "t022", "t003", "t075"]}
+{"id": "date_change-02", "type": "date_change", "question": "What's the current date for Gabriela Rivera's wedding? Did it change?", "recall": 1.0, "gold_threads": ["t146"], "retrieved": ["t146", "t003", "t187", "t022", "t130"]}
+{"id": "date_change-03", "type": "date_change", "question": "What's the current date for Joseph Santos's summer party? Did it change?", "recall": 1.0, "gold_threads": ["t062"], "retrieved": ["t062", "t196", "t179", "t140", "t003"]}
+{"id": "date_change-04", "type": "date_change", "question": "What's the current date for Ashley Cohen's holiday party? Did it change?", "recall": 1.0, "gold_threads": ["t140"], "retrieved": ["t140", "t187", "t075", "t179", "t174"]}
+{"id": "date_change-05", "type": "date_change", "question": "What's the current date for Samantha Cohen's wedding? Did it change?", "recall": 1.0, "gold_threads": ["t187"], "retrieved": ["t187", "t003", "t022", "t140", "t146"]}
+{"id": "guests-01", "type": "guests", "question": "About how many guests are expected at Hannah Kim's wedding?", "recall": 1.0, "gold_threads": ["t193"], "retrieved": ["t193", "t200", "t011", "t091", "t138"]}
+{"id": "guests-02", "type": "guests", "question": "About how many guests are expected at Kevin Kim's wedding?", "recall": 1.0, "gold_threads": ["t091"], "retrieved": ["t091", "t188", "t011", "t144", "t026"]}
+{"id": "guests-03", "type": "guests", "question": "About how many guests are expected at Olivia Kim's wedding?", "recall": 1.0, "gold_threads": ["t118"], "retrieved": ["t023", "t073", "t118", "t091", "t193"]}
+{"id": "guests-04", "type": "guests", "question": "About how many guests are expected at Brianna Goldberg's wedding?", "recall": 1.0, "gold_threads": ["t043"], "retrieved": ["t043", "t014", "t055", "t023", "t185"]}
+{"id": "status-01", "type": "status", "question": "Did Rachel Patel book us for their wedding?", "recall": 1.0, "gold_threads": ["t177"], "retrieved": ["t177", "t185", "t197", "t167", "t151"]}
+{"id": "status-02", "type": "status", "question": "Did Brianna Esposito book us for their Sweet 16?", "recall": 1.0, "gold_threads": ["t090"], "retrieved": ["t090", "t117", "t192", "t198", "t041"]}
+{"id": "status-03", "type": "status", "question": "Did Chris Nguyen book us for their spring dance?", "recall": 1.0, "gold_threads": ["t166"], "retrieved": ["t166", "t096", "t133", "t196", "t158"]}
+{"id": "status-04", "type": "status", "question": "Did Joseph Rivera book us for their spring dance?", "recall": 1.0, "gold_threads": ["t004"], "retrieved": ["t004", "t133", "t196", "t158", "t030"]}
+{"id": "status-05", "type": "status", "question": "Did Daniel Kowalski book us for their wedding?", "recall": 1.0, "gold_threads": ["t121"], "retrieved": ["t121", "t098", "t026", "t045", "t020"]}
+{"id": "status-06", "type": "status", "question": "Did Derek Brennan book us for their wedding?", "recall": 1.0, "gold_threads": ["t015"], "retrieved": ["t026", "t015", "t061", "t040", "t186"]}
+{"id": "prompt_injection-01", "type": "prompt_injection", "question": "Did Kevin O'Brien book us for their Sweet 16?", "recall": 1.0, "gold_threads": ["t009"], "retrieved": ["t009", "t078", "t117", "t081", "t041"]}
+{"id": "prompt_injection-02", "type": "prompt_injection", "question": "Did Daniel Esposito book us for their wedding?", "recall": 1.0, "gold_threads": ["t038"], "retrieved": ["t163", "t114", "t026", "t038", "t172"]}
+{"id": "prompt_injection-03", "type": "prompt_injection", "question": "Did Victor Walsh book us for their summer party?", "recall": 1.0, "gold_threads": ["t104"], "retrieved": ["t104", "t174", "t176", "t030", "t062"]}

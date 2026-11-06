@@ -85,8 +85,10 @@ def test_end_to_end_on_the_synthetic_inbox(tmp_path):
     chunks = chunk_inbox(threads)
     with (ROOT / "evals" / "questions.jsonl").open(encoding="utf-8") as fh:
         questions = [Question.model_validate_json(line) for line in fh]
-    rows = evaluate(Embedder(FakeGenai(), cache_dir=tmp_path), chunks, questions, k=5)
+    by_id = {t.thread_id: t for t in threads}
+    rows = evaluate(Embedder(FakeGenai(), cache_dir=tmp_path), chunks, by_id, questions, k=5)
     assert len(rows) == sum(bool(q.gold_evidence) for q in questions)      # count/not-in-inbox skipped
-    assert all(0 <= r["recall"] <= 1 and len(r["retrieved"]) == 5 for r in rows)
+    assert all(0 <= r["recall"] <= 1 for r in rows)
+    assert all(len(r["retrieved"]) == 5 == len(set(r["retrieved"])) for r in rows)   # 5 DIFFERENT threads
     assert report(rows, 5).startswith("recall@5: ")
     json.dumps(rows)                                                         # results file is writable
