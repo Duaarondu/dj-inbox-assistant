@@ -25,7 +25,7 @@ from pathlib import Path
 from dj_inbox.ingest import CompanyConfig, read_mbox
 from dj_inbox.rag.chunk import chunk_inbox
 from dj_inbox.rag.embed import Embedder
-from dj_inbox.rag.search import cosine_top_k
+from dj_inbox.rag.retrieve import top_threads
 from evals.score import Question, recall_at_k
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,14 +42,7 @@ def evaluate(embedder: Embedder, chunks, threads: dict, questions: list[Question
     qvecs = embedder.embed([q.question for q in scored], "RETRIEVAL_QUERY")
     rows = []
     for q, qvec in zip(scored, qvecs, strict=True):
-        top = cosine_top_k(qvec, matrix, 50)
-        thread_ids = []
-        for i in top:
-            tid = chunks[i].thread_id
-            if tid not in thread_ids:
-                thread_ids.append(tid)
-            if len(thread_ids) == k:
-                break
+        thread_ids = top_threads(qvec, matrix, chunks, k)          # small-to-big, see dj_inbox/rag/retrieve.py
         retrieved = [(tid, threads[tid].clean_text()) for tid in thread_ids]
         rows.append({"id": q.id, "type": q.type, "question": q.question,
                      "recall": recall_at_k(retrieved, q.gold_evidence, k),
