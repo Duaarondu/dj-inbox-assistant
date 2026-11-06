@@ -3,7 +3,7 @@ name = "dj-inbox-assistant"
 version = "0.1.0"
 description = "Ask-your-inbox assistant for DJ and event companies"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2.7", "anthropic>=2.5", "google-genai>=2.34", "numpy>=2.0", "python-dotenv>=1.0"]
+dependencies = ["pydantic>=2.7", "anthropic>=2.5", "google-genai>=2.34", "google-adk>=2.13", "numpy>=2.0", "python-dotenv>=1.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
