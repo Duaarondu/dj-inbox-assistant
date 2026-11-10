@@ -62,7 +62,8 @@ async def run_workflow_async(root: Workflow, question: str, company_id: str) -> 
         if event.usage_metadata:                   # one per model call
             result.model_calls += 1
             result.tokens_in += event.usage_metadata.prompt_token_count or 0
-            result.tokens_out += event.usage_metadata.candidates_token_count or 0
+            result.tokens_out += (event.usage_metadata.candidates_token_count or 0) + (
+                event.usage_metadata.thoughts_token_count or 0)   # thinking tokens are billed as output
         if event.author == root.name and getattr(event, "output", None) is not None:
             result.output = event.output           # the last output from the top node is the answer
     result.latency_s = time.perf_counter() - start

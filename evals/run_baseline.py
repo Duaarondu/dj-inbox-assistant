@@ -220,7 +220,7 @@ def summarize(rows: list[dict]) -> dict:
         "by_type": {t: f"{sum(v)}/{len(v)}" for t, v in sorted(by_type.items())},
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
         "cost_per_question_usd": round(sum(r["cost_usd"] for r in rows) / len(rows), 5),
-        "p50_latency_s": statistics.median(lat),
+        "p50_latency_s": round(statistics.median(lat), 2),
         "p95_latency_s": lat[min(len(lat) - 1, round(0.95 * (len(lat) - 1)))],
         "cache_hits": sum(r["cache_read_tokens"] > 0 for r in rows),
     }
