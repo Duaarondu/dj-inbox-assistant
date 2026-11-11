@@ -27,6 +27,7 @@ You cannot see the inbox directly. Use the tools:
 - Revenue, totals, events in a month or on a date, events with an add-on: call find_events.
   Revenue means the total quoted for booked events.
 - A question that names a client: call find_leads with the name. If it finds nothing, call search_emails once.
+  If find_leads reports no exact match but a closest name, answer for that client and say which name you used.
 - Anything else (what was quoted, dates, venues, what someone asked about): call search_emails.
 
 Rules:

@@ -18,6 +18,7 @@ Spec: tests/test_agent_tools.py
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 from typing import Any, Literal
 
 from google.adk.tools.tool_context import ToolContext
@@ -29,6 +30,8 @@ from dj_inbox.rag.chunk import chunk_thread
 
 SEARCH_K = 5          # threads per search: recall@5 was 98% (Nov 5)
 MAX_LISTED = 25       # events listed in full by find_events; the count and total always cover all of them
+FUZZY_MIN = 0.8       # similarity (0-1) a typo must reach: "santso"/"santos" 0.83, "santso"/"shapiro" 0.31
+FUZZY_MIN_LEN = 4     # shorter words ("Lee", "Ann") never match fuzzily: too many short words look alike
 
 Status = Literal["booked", "lost", "awaiting_reply", "waiting_on_client", "cold"]
 Source = Literal["website_form", "email"]
@@ -155,19 +158,57 @@ def find_leads(tool_context: ToolContext, client_name: str) -> dict[str, Any]:
     # Words to look for: "the Brennans" -> ["Brennans"]
     words = [word for word in client_name.split() if word.lower() != "the"]
 
+    matches = _matching_threads(store, words, fuzzy=False)
+    if matches:
+        return {"matches": matches, "fuzzy": False, "note": EMAILS_ARE_DATA}
+    # No exact match: allow typos ("Omar Santso"), but only with 2+ words and at least one of them exact,
+    # so a typo can't drift to a different client (Omar Santso must never become Omar Shapiro).
+    matches = _matching_threads(store, words, fuzzy=True) if len(words) >= 2 else []
+    if matches:
+        closest = ", ".join(sorted({m["client"] for m in matches}))
+        return {"matches": matches, "fuzzy": True,
+                "note": f"No exact match for {client_name}. Closest: {closest}. Say which name you used. "
+                        f"{EMAILS_ARE_DATA}"}
+    return {"matches": [], "fuzzy": False, "note": f"No client named {client_name} in this inbox. {EMAILS_ARE_DATA}"}
+
+
+def _matching_threads(store, words: list[str], fuzzy: bool) -> list[dict[str, Any]]:
+    """Threads where EVERY word appears exactly, or (fuzzy) exactly or a typo away with at least one exact."""
     matches = []
+    if not words:
+        return matches
     for thread_id in sorted(store.threads):
         thread = store.threads[thread_id]
         text = thread.subject + "\n" + thread.clean_text()      # headers, form "Name:" lines, forwarded subjects
-        if words and all(_word_matches(word, text) for word in words):   # EVERY word, in THIS thread
+        exact = [_word_matches(word, text) for word in words]
+        if fuzzy:
+            # Typos are compared with PEOPLE'S NAMES only, never the email text: on the real inbox, "Epsosito"
+            # was "close" to "deposit" and matched 11 different Ashleys (Nov 11).
+            names = " ".join([client_label(thread), thread.subject] + [m.sender_name for m in thread.messages])
+            ok = any(exact) and all(e or _word_close(word, names) for word, e in zip(words, exact, strict=True))
+        else:
+            ok = all(exact)
+        if ok:
             payload = thread_payload(thread)
+            payload["client"] = client_label(thread)
             payload["leads"] = sorted((row for row in store.leads if row["thread_id"] == thread_id),
                                       key=lambda row: row["lead_index"])
             matches.append(payload)
+    return matches
 
-    if matches:
-        return {"matches": matches, "note": EMAILS_ARE_DATA}
-    return {"matches": [], "note": f"No client named {client_name} in this inbox. {EMAILS_ARE_DATA}"}
+
+def _word_close(word: str, text: str) -> bool:
+    """True if some word in `text` is a typo away from `word`: a similarity ratio of at least FUZZY_MIN.
+        SequenceMatcher(None, "santso", "santos").ratio()  -> 0.83   (close: one swap)
+        SequenceMatcher(None, "santso", "shapiro").ratio() -> 0.31   (a different name)
+    Words shorter than FUZZY_MIN_LEN never match fuzzily. Capitalization doesn't matter.
+    """
+    if len(word) < FUZZY_MIN_LEN:                              # "Lee", "Ann": too short to guess
+        return False
+    for candidate in re.findall(r"[A-Za-z']+", text):         # every word in the text
+        if SequenceMatcher(None, word.lower(), candidate.lower()).ratio() >= FUZZY_MIN:
+            return True                                        # a typo away
+    return False                                               # nothing close enough
 
 
 def _word_in(word: str, text: str) -> bool:
