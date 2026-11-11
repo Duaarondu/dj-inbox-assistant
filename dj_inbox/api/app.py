@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 
 from dj_inbox.agent.runtime import RunResult, run_workflow_async
 from dj_inbox.agent.store import InboxStore, get_store
-from dj_inbox.ingest import EmailThread
+from dj_inbox.agent.tools import client_label
 
 DEFAULT_MODEL = "gemini-3.5-flash-lite"     # Nov 9: same 50/50 as Flash, 4x cheaper, 3x faster
 MAX_QUESTION_CHARS = 500
@@ -120,16 +120,9 @@ def _matched_threads(result: RunResult) -> list[str]:
     for call in result.tool_calls:
         if call.name == "count_leads" and isinstance(call.response, dict):
             return list(call.response.get("thread_ids", []))
+        if call.name == "find_events" and isinstance(call.response, dict):
+            return list(dict.fromkeys(e["thread_id"] for e in call.response.get("events", [])))
     return []
-
-
-def client_label(thread: EmailThread) -> str:
-    """Who the lead is, for the tracker: the client's name, the "Name:" line of a website form, or the subject."""
-    first = thread.messages[0]
-    if first.sender_role == "client" and "form" not in first.sender_name.lower():
-        return first.sender_name
-    match = re.search(r"^Name:\s*(.+)$", first.body_clean, re.MULTILINE)
-    return match.group(1).strip() if match else thread.subject
 
 
 def _cost(model: str, tokens_in: int, tokens_out: int) -> float:

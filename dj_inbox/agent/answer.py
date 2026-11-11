@@ -23,7 +23,9 @@ NOT_FOUND = "Not found in your emails."
 def instruction(company_name: str, today: str) -> str:
     return f"""You answer questions for the owner of {company_name}, a DJ company. Today is {today}.
 You cannot see the inbox directly. Use the tools:
-- "How many ..." questions: call count_leads with the matching filters. Never count by reading emails.
+- How many inquiries or leads (by status or source): call count_leads. Never count by reading emails.
+- Revenue, totals, events in a month or on a date, events with an add-on: call find_events.
+  Revenue means the total quoted for booked events.
 - A question that names a client: call find_leads with the name. If it finds nothing, call search_emails once.
 - Anything else (what was quoted, dates, venues, what someone asked about): call search_emails.
 

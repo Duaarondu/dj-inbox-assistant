@@ -17,8 +17,9 @@ from types import SimpleNamespace
 import pytest
 
 from dj_inbox.agent import store as store_mod
+from dj_inbox.agent import tools as tools_mod
 from dj_inbox.agent.store import InboxStore
-from dj_inbox.agent.tools import SEARCH_K, count_leads, find_leads, search_emails
+from dj_inbox.agent.tools import SEARCH_K, count_leads, find_events, find_leads, search_emails
 from dj_inbox.ingest import Contacts, Email, EmailThread
 
 
@@ -31,9 +32,11 @@ def thread(tid: str, subject: str, *messages: tuple[str, str, str]) -> EmailThre
     return EmailThread(thread_id=tid, subject=subject, messages=emails)
 
 
-def lead(tid: str, index: int, event_type: str, status: str, source: str = "email", price: int = 2000) -> dict:
+def lead(tid: str, index: int, event_type: str, status: str, source: str = "email", price: int | None = 2000,
+         event_date: str | None = None, addons: tuple[str, ...] = (), venue: str | None = None) -> dict:
     return {"thread_id": tid, "lead_index": index, "event_type": event_type, "status": status, "source": source,
-            "quoted_price": price, "outcome": "booked" if status == "booked" else "open"}
+            "quoted_price": price, "outcome": "booked" if status == "booked" else "open",
+            "event_date": event_date, "addons_quoted": list(addons), "venue": venue}
 
 
 NORTHSHORE_THREADS = [
@@ -50,15 +53,17 @@ NORTHSHORE_THREADS = [
            ("company", "Dana", "Hi Omar, Premier is $3,100.")),
 ]
 NORTHSHORE_LEADS = [
-    lead("t1", 0, "wedding", "booked", price=2395),
-    lead("t1", 1, "engagement_party", "booked", price=1200),
-    lead("t2", 0, "wedding", "cold", source="website_form", price=1795),
-    lead("t3", 0, "wedding", "awaiting_reply"),
-    lead("t4", 0, "sweet16", "lost", price=1500),
-    lead("t5", 0, "wedding", "waiting_on_client", price=3100),
+    lead("t1", 0, "wedding", "booked", price=2395, event_date="2026-06-20", addons=("photo booth", "uplighting"),
+         venue="The Willow Estate"),
+    lead("t1", 1, "engagement_party", "booked", price=1200, event_date="2026-03-14"),
+    lead("t2", 0, "wedding", "cold", source="website_form", price=1795, event_date="2026-09-27",
+         addons=("Photo Booth",)),
+    lead("t3", 0, "wedding", "awaiting_reply", event_date="2026-06-06"),
+    lead("t4", 0, "sweet16", "lost", price=1500, event_date="2025-07-19", addons=("dancing on clouds",)),
+    lead("t5", 0, "wedding", "waiting_on_client", price=None),                 # no date, no price yet
 ]
 OTHER_THREADS = [thread("t9", "DJ for our wedding", ("client", "Marco Brennan", "Is May 2 free?"))]
-OTHER_LEADS = [lead("t9", 0, "wedding", "booked")]
+OTHER_LEADS = [lead("t9", 0, "wedding", "booked", price=9999, event_date="2026-06-20")]
 
 search_calls: list[tuple[str, int]] = []
 
@@ -173,3 +178,58 @@ def test_search_returns_whole_threads_in_ranked_order():
 
 def test_search_uses_this_companys_index():
     assert [t["thread_id"] for t in search_emails(ctx("other-co"), "anything")["threads"]] == ["t9"]
+
+
+# ---------- find_events ----------
+
+def client_list(result: dict) -> list[str]:
+    return [e["client"] for e in result["events"]]
+
+
+def test_revenue_counts_every_booked_event_including_second_events():
+    result = find_events(ctx(), status="booked", year=2026)
+    assert (result["count"], result["total_quoted"]) == (2, 2395 + 1200)       # wedding + engagement party
+    assert [e["event_type"] for e in result["events"]] == ["engagement_party", "wedding"]   # by date
+    assert result["filters"] == {"status": "booked", "year": 2026}
+
+
+def test_no_filters_gives_every_event_and_a_missing_price_counts_as_zero():
+    result = find_events(ctx())
+    assert result["count"] == 6
+    assert result["total_quoted"] == 2395 + 1200 + 1795 + 2000 + 1500       # t5 has no price yet
+
+
+@pytest.mark.parametrize(("filters", "threads"), [
+    ({"year": 2026, "month": 6}, ["t3", "t1"]),             # June 6 before June 20
+    ({"month": 6}, ["t3", "t1"]),
+    ({"date": "2026-06-06"}, ["t3"]),
+    ({"year": 2025}, ["t4"]),
+    ({"event_type": "engagement_party"}, ["t1"]),
+    ({"addon": "photo booth"}, ["t1", "t2"]),               # "Photo Booth" in t2: capitalization doesn't matter
+    ({"addon": "DANCING ON CLOUDS", "status": "lost"}, ["t4"]),
+    ({"addon": "photo booth", "status": "booked"}, ["t1"]),
+    ({"year": 2027}, []),
+])
+def test_find_events_applies_every_filter(filters, threads):
+    assert [e["thread_id"] for e in find_events(ctx(), **filters)["events"]] == threads
+
+
+def test_an_event_with_no_date_never_matches_a_date_filter():
+    for filters in ({"year": 2026}, {"month": 6}, {"date": "2026-06-20"}):
+        assert "t5" not in [e["thread_id"] for e in find_events(ctx(), **filters)["events"]]
+
+
+def test_events_name_the_client_even_for_website_forms():
+    assert client_list(find_events(ctx(), date="2026-09-27")) == ["Anna Lee"]
+    assert find_events(ctx(), date="2026-06-20")["events"][0]["client"] == "Marco Brennan"
+
+
+def test_find_events_sees_only_this_companys_events():
+    assert find_events(ctx(), date="2026-06-20")["total_quoted"] == 2395             # not + t9's 9999
+    assert find_events(ctx("other-co"))["total_quoted"] == 9999
+
+
+def test_long_lists_are_cut_but_count_and_total_cover_everything(monkeypatch):
+    monkeypatch.setattr(tools_mod, "MAX_LISTED", 2)
+    result = find_events(ctx())
+    assert result["count"] == 6 and len(result["events"]) == 2
