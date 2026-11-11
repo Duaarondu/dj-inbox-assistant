@@ -19,7 +19,7 @@ import pytest
 from dj_inbox.agent import store as store_mod
 from dj_inbox.agent import tools as tools_mod
 from dj_inbox.agent.store import InboxStore
-from dj_inbox.agent.tools import SEARCH_K, count_leads, find_events, find_leads, search_emails
+from dj_inbox.agent.tools import SEARCH_K, _word_close, count_leads, find_events, find_leads, search_emails
 from dj_inbox.ingest import Contacts, Email, EmailThread
 
 
@@ -233,3 +233,49 @@ def test_long_lists_are_cut_but_count_and_total_cover_everything(monkeypatch):
     monkeypatch.setattr(tools_mod, "MAX_LISTED", 2)
     result = find_events(ctx())
     assert result["count"] == 6 and len(result["events"]) == 2
+
+
+# ---------- find_leads: typos (fuzzy fallback, Nov 11) ----------
+
+@pytest.mark.parametrize(("word", "text", "close"), [
+    ("Santso", "Hi Omar Santos here", True),          # two letters swapped
+    ("Brenan", "Marco Brennan", True),                # a letter missing
+    ("brennnan", "MARCO BRENNAN", True),              # a letter doubled, any case
+    ("Santso", "Omar Shapiro", False),                # a different name
+    ("Lea", "Anna Lee", False),                       # too short to guess: never fuzzy
+    ("Brennan", "", False),                           # nothing to match
+])
+def test_word_close(word, text, close):
+    assert _word_close(word, text) is close
+
+
+def test_exact_match_wins_and_is_marked_not_fuzzy():
+    result = find_leads(ctx(), "Omar Santos")
+    assert thread_ids(result) == ["t5"] and result["fuzzy"] is False
+
+
+@pytest.mark.parametrize(("name", "expected"), [
+    ("Omar Santso", ["t5"]),          # typo in the last name
+    ("Mraco Brennan", ["t1"]),        # typo in the first name
+    ("Emily Snatos", ["t4"]),
+])
+def test_a_typo_finds_the_closest_client_and_says_so(name, expected):
+    result = find_leads(ctx(), name)
+    assert thread_ids(result) == expected
+    assert result["fuzzy"] is True
+    assert result["matches"][0]["client"] in result["note"]       # "Closest: Omar Santos"
+
+
+@pytest.mark.parametrize("name", [
+    "Omar Shapirro Santos",           # 3 words: Shapirro is close to Shapiro, but not in the SAME thread as Santos
+    "Omr Santso",                     # no word exact: too far to guess
+    "Zed Quinn",                      # nothing close at all
+    "Dana Signatur",                  # "Signatur" is close to "Signature" in an email, but that's not a NAME
+])
+def test_a_typo_never_drifts_to_another_client(name):
+    result = find_leads(ctx(), name)
+    assert result["matches"] == [] and "No client named" in result["note"]
+
+
+def test_a_typo_never_crosses_companies():
+    assert find_leads(ctx("other-co"), "Omar Santso")["matches"] == []          # t5 belongs to Northshore

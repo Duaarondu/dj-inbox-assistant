@@ -15,7 +15,7 @@ import pytest
 
 from dj_inbox.agent import store as store_mod
 from dj_inbox.agent.store import InboxStore
-from dj_inbox.agent.tools import find_leads
+from dj_inbox.agent.tools import _matching_threads, find_leads
 from dj_inbox.ingest import CompanyConfig, read_mbox
 from evals.make_questions import long_date
 from evals.score import Question
@@ -82,6 +82,7 @@ def test_second_events_whose_deposit_covered_only_the_main_event_are_not_booked(
 
 
 def test_a_misspelled_name_really_misses_exact_lookup_but_the_real_name_hits():
+    """(Since Nov 11 find_leads has a fuzzy fallback; this checks the EXACT pass, which the typo must miss.)"""
     """Otherwise the 'misspelled' type wouldn't test what it claims."""
     store_mod.clear()
     store_mod.register(InboxStore("t", "T", LEADS, THREADS, lambda q, k: []))
@@ -90,7 +91,7 @@ def test_a_misspelled_name_really_misses_exact_lookup_but_the_real_name_hits():
         for q in of_type("misspelled"):
             typo_name = re.search(r"quote (.+?) for their", q.question).group(1)
             real_name = re.search(r"the client is (.+)\)", q.expected_answer).group(1)
-            assert find_leads(ctx, typo_name)["matches"] == [], q.id
+            assert _matching_threads(store_mod.get_store("t"), typo_name.split(), fuzzy=False) == [], q.id
             assert find_leads(ctx, real_name)["matches"], q.id
     finally:
         store_mod.clear()
