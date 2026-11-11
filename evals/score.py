@@ -46,7 +46,12 @@ class Score(BaseModel):
 
 # Words that mean the answer is a "not found". Lowercase; match anywhere in the answer.
 DEFER_PHRASES = ["not found", "couldn't find", "could not find", "no record", "don't see", "do not see",
-                 "nothing in your emails", "no emails"]
+                 "nothing in your emails", "no emails",
+                 # v2 (Nov 11): honest answers to "what's their first-dance song?" usually say the emails don't
+                 # mention it; "none of ... mention" answers "which jobs mention a flower wall?"
+                 "don't mention", "doesn't mention", "do not mention", "does not mention", "not mentioned",
+                 "no mention", "don't say", "doesn't say", "does not say", "do not say", "not specified",
+                 "none of"]
 
 # How a status fact can be stated in an answer. Careful: "not booked" contains "booked".
 STATUS_WORDS = {

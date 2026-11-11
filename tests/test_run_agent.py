@@ -60,7 +60,7 @@ def test_run_scores_routes_and_prices_each_question(tmp_path):
     assert [json.loads(line)["id"] for line in out.read_text().splitlines()] == ["count-01", "price-01"]
 
     summary = routing_summary(rows)
-    assert summary["count_to_count_leads"] == "1/1" and summary["others_kept_off_count_leads"] == "1/1"
+    assert summary["count_to_counting_tool"] == "1/1" and summary["others_kept_off_counting_tools"] == "1/1"
 
 
 def test_an_error_on_one_question_is_recorded_and_the_run_continues():
@@ -80,14 +80,15 @@ def test_the_model_never_sees_curly_braces_or_a_company_id_parameter():
         [question("x", "not_in_inbox", "Karaoke?", [])], max_cost=1.0)
     request = model.requests[0]
     assert "{" not in str(request.config.system_instruction)
-    assert sorted(model.tool_names_shown()) == ["count_leads", "find_leads", "search_emails"]
+    assert sorted(model.tool_names_shown()) == ["count_leads", "find_events", "find_leads", "search_emails"]
     for name in model.tool_names_shown():
         assert "company_id" not in model.tool_params_shown(name)
 
 
 @pytest.mark.parametrize(("qtype", "tools", "ok"), [
-    ("count", ["count_leads"], True), ("count", ["search_emails"], False),
+    ("count", ["count_leads"], True), ("count", ["find_events"], True), ("count", ["search_emails"], False),
     ("price", ["find_leads"], True), ("price", ["count_leads", "find_leads"], False),
+    ("price", ["find_events"], False),
 ])
 def test_routed_ok(qtype, tools, ok):
     assert routed_ok(qtype, tools) is ok
