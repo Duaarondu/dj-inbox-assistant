@@ -7,7 +7,7 @@
     GET  /leads          the lead tracker: ?status=cold&event_type=wedding&source=website_form (all optional);
                          one row per inquiry, like count_leads. ?all_events=true adds 2nd events (engagement party)
     GET  /threads/{id}   one thread's emails (what a cited source links to)
-    GET  /healthz        is it up, and what data is loaded
+    GET  /health         is it up, and what data is loaded (not /healthz: Cloud Run reserves paths ending in z)
 
 company_id: DEMO ONLY, it is fixed on the server (DEMO_COMPANY_ID) and never read from a request. After
 Google sign-in it comes from the verified user. Every endpoint goes through get_store(company_id).
@@ -167,8 +167,8 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
     def company() -> InboxStore:
         return get_store(company_id)                # the ONLY way an endpoint reaches data
 
-    @app.get("/healthz")
-    def healthz() -> dict:
+    @app.get("/health")
+    def health() -> dict:
         s = company()
         return {"ok": True, "company": s.company_name, "threads": len(s.threads), "leads": len(s.leads),
                 "model": model}

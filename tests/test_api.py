@@ -52,9 +52,10 @@ def client_for(store: InboxStore, model: FakeLlm, cap: DailyCap | None = None) -
     return TestClient(app)
 
 
-def test_healthz(northshore):
+def test_health(northshore):
     with client_for(northshore, FakeLlm()) as c:
-        assert c.get("/healthz").json() == {"ok": True, "company": "Northshore Sound Co.", "threads": 2, "leads": 3,
+        assert c.get("/healthz").status_code == 404     # reserved on Cloud Run, so we never use it
+        assert c.get("/health").json() == {"ok": True, "company": "Northshore Sound Co.", "threads": 2, "leads": 3,
                                             "model": "gemini-3.5-flash-lite"}
 
 
