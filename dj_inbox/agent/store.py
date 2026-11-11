@@ -9,6 +9,7 @@ store_for becomes "every query has WHERE company_id = :company_id" plus row-leve
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,7 +61,11 @@ def store_for(tool_context: Any) -> InboxStore:
 
 
 def load_northshore() -> InboxStore:
-    """The synthetic inbox with real retrieval. Embeds only what isn't cached yet (query embeddings: 1 call each)."""
+    """The synthetic inbox with real retrieval. Embeds only what isn't cached yet (query embeddings: 1 call each).
+
+    VECTOR_BACKEND=pgvector searches Postgres (DATABASE_URL; load it first: python -m dj_inbox.db.load).
+    Default: the NumPy search over the cached vectors. Same small-to-big contract either way.
+    """
     import numpy as np
 
     from dj_inbox.gcp import gemini_client
@@ -76,16 +81,29 @@ def load_northshore() -> InboxStore:
         leads = [json.loads(line) for line in fh]
 
     client = gemini_client()
-    chunks = chunk_inbox(threads)
-    matrix: np.ndarray = Embedder(client, cache_dir=VECTORS).embed([c.text for c in chunks], "RETRIEVAL_DOCUMENT")
     # Questions are cached in memory only: the disk cache is ~10 MB and is rewritten on every new text,
     # which would add a full-file write to every question the API answers.
     query_embedder = Embedder(client, cache_dir=None)
+    company_id = "northshore"
 
-    def search(query: str, k: int) -> list[str]:
-        qvec = query_embedder.embed([query], "RETRIEVAL_QUERY")[0]
-        return top_threads(qvec, matrix, chunks, k)
+    if os.environ.get("VECTOR_BACKEND", "numpy") == "pgvector":
+        from dj_inbox.db import make_pool
+        from dj_inbox.rag.pg_search import top_threads_pg
 
-    store = InboxStore("northshore", "Northshore Sound Co.", leads, {t.thread_id: t for t in threads}, search)
+        pool = make_pool()
+
+        def search(query: str, k: int) -> list[str]:
+            qvec = query_embedder.embed([query], "RETRIEVAL_QUERY")[0]
+            with pool.connection() as conn:
+                return top_threads_pg(conn, company_id, qvec, k)    # filtered on company_id in SQL
+    else:
+        chunks = chunk_inbox(threads)
+        matrix: np.ndarray = Embedder(client, cache_dir=VECTORS).embed([c.text for c in chunks], "RETRIEVAL_DOCUMENT")
+
+        def search(query: str, k: int) -> list[str]:
+            qvec = query_embedder.embed([query], "RETRIEVAL_QUERY")[0]
+            return top_threads(qvec, matrix, chunks, k)
+
+    store = InboxStore(company_id, "Northshore Sound Co.", leads, {t.thread_id: t for t in threads}, search)
     register(store)
     return store

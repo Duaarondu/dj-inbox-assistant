@@ -3,6 +3,7 @@
 
     python -m evals.run_retrieval            # recall@5 over every question that has a gold email
     python -m evals.run_retrieval --k 10     # how much does looking at 10 instead of 5 help?
+    python -m evals.run_retrieval --backend pgvector   # same eval, search done by Postgres (DATABASE_URL)
 
 For each question: embed it, find the most similar emails, and keep the first k DIFFERENT threads they belong to
 ("small-to-big": search small units, return the whole conversation). Then check whether the gold email is in them.
@@ -35,14 +36,20 @@ RESULTS = Path(__file__).resolve().parent / "results"
 CACHE = ROOT / "data" / "embeddings"           # git-ignored (data/ is generated)
 
 
-def evaluate(embedder: Embedder, chunks, threads: dict, questions: list[Question], k: int) -> list[dict]:
-    """threads: {thread_id: EmailThread}, used to return whole conversations."""
-    matrix = embedder.embed([c.text for c in chunks], "RETRIEVAL_DOCUMENT")
+def evaluate(embedder: Embedder, chunks, threads: dict, questions: list[Question], k: int,
+             search=None) -> list[dict]:
+    """threads: {thread_id: EmailThread}, used to return whole conversations.
+    search(qvec, k) -> thread ids; default: the NumPy small-to-big search over the cached vectors."""
+    if search is None:
+        matrix = embedder.embed([c.text for c in chunks], "RETRIEVAL_DOCUMENT")
+
+        def search(qvec, k):
+            return top_threads(qvec, matrix, chunks, k)
     scored = [q for q in questions if q.gold_evidence]
     qvecs = embedder.embed([q.question for q in scored], "RETRIEVAL_QUERY")
     rows = []
     for q, qvec in zip(scored, qvecs, strict=True):
-        thread_ids = top_threads(qvec, matrix, chunks, k)          # small-to-big, see dj_inbox/rag/retrieve.py
+        thread_ids = search(qvec, k)                                # small-to-big, see dj_inbox/rag/retrieve.py
         retrieved = [(tid, threads[tid].clean_text()) for tid in thread_ids]
         rows.append({"id": q.id, "type": q.type, "question": q.question,
                      "recall": recall_at_k(retrieved, q.gold_evidence, k),
@@ -67,6 +74,7 @@ def report(rows: list[dict], k: int) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--k", type=int, default=5)
+    ap.add_argument("--backend", choices=["numpy", "pgvector"], default="numpy")
     args = ap.parse_args()
 
     client = gemini_client()
@@ -79,12 +87,23 @@ def main() -> None:
     start = time.perf_counter()
     embedder = Embedder(client, cache_dir=CACHE)
     threads_by_id = {t.thread_id: t for t in threads}
-    rows = evaluate(embedder, chunks, threads_by_id, questions, args.k)
-    print(f"{len(chunks)} chunks, {embedder.calls} embedding API calls, {time.perf_counter() - start:.1f}s")
+    search = None
+    if args.backend == "pgvector":
+        from dj_inbox.db import connect
+        from dj_inbox.rag.pg_search import top_threads_pg
+
+        conn = connect()
+
+        def search(qvec, k):
+            return top_threads_pg(conn, "northshore", qvec, k)
+    rows = evaluate(embedder, chunks, threads_by_id, questions, args.k, search=search)
+    print(f"[{args.backend}] {len(chunks)} chunks, {embedder.calls} embedding API calls, "
+          f"{time.perf_counter() - start:.1f}s")
     print(report(rows, args.k))
 
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"retrieval-k{args.k}-{datetime.now():%Y%m%d-%H%M}.jsonl"
+    tag = "" if args.backend == "numpy" else f"-{args.backend}"
+    out = RESULTS / f"retrieval{tag}-k{args.k}-{datetime.now():%Y%m%d-%H%M}.jsonl"
     out.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     print(f"details -> {out}")
 
