@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip                                # reuse downloaded packages between runs
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: requirements*.txt
       - run: python -m pip install -r requirements-dev.txt
       - run: ruff check .
 
@@ -40,6 +40,6 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: requirements*.txt
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest -q

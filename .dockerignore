@@ -1,0 +1,13 @@
+# Same as .gcloudignore, for local `docker build` too. Above all: .env (secrets) never goes into an image.
+.git
+.github/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+.env
+tests/
+evals/results/
+data/extractions/

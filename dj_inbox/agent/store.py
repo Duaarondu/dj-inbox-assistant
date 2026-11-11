@@ -46,12 +46,17 @@ def clear() -> None:
     _STORES.clear()
 
 
-def store_for(tool_context: Any) -> InboxStore:
-    """The data of the company in this session, and nothing else."""
-    company_id = tool_context.state.get("company_id")
+def get_store(company_id: str | None) -> InboxStore:
+    """One company's data. The caller must get company_id from the session or the signed-in user, never
+    from model output or a request body."""
     if company_id not in _STORES:
         raise PermissionError(f"No data loaded for company {company_id!r}")
     return _STORES[company_id]
+
+
+def store_for(tool_context: Any) -> InboxStore:
+    """The data of the company in this session, and nothing else."""
+    return get_store(tool_context.state.get("company_id"))
 
 
 def load_northshore() -> InboxStore:
@@ -70,12 +75,15 @@ def load_northshore() -> InboxStore:
     with LEADS.open(encoding="utf-8") as fh:
         leads = [json.loads(line) for line in fh]
 
-    embedder = Embedder(gemini_client(), cache_dir=VECTORS)
+    client = gemini_client()
     chunks = chunk_inbox(threads)
-    matrix: np.ndarray = embedder.embed([c.text for c in chunks], "RETRIEVAL_DOCUMENT")
+    matrix: np.ndarray = Embedder(client, cache_dir=VECTORS).embed([c.text for c in chunks], "RETRIEVAL_DOCUMENT")
+    # Questions are cached in memory only: the disk cache is ~10 MB and is rewritten on every new text,
+    # which would add a full-file write to every question the API answers.
+    query_embedder = Embedder(client, cache_dir=None)
 
     def search(query: str, k: int) -> list[str]:
-        qvec = embedder.embed([query], "RETRIEVAL_QUERY")[0]
+        qvec = query_embedder.embed([query], "RETRIEVAL_QUERY")[0]
         return top_threads(qvec, matrix, chunks, k)
 
     store = InboxStore("northshore", "Northshore Sound Co.", leads, {t.thread_id: t for t in threads}, search)
