@@ -35,7 +35,18 @@ from pydantic import BaseModel, Field
 from dj_inbox.agent.runtime import RunResult, run_workflow_async
 from dj_inbox.agent.store import InboxStore, get_store
 from dj_inbox.agent.tools import client_label
-from dj_inbox.api.auth import AuthError, Caller, MembershipLookup, TokenVerifier, db_memberships, resolve_caller
+from dj_inbox.api.auth import (
+    AlreadyHasCompany,
+    AuthError,
+    Caller,
+    CompanyCreator,
+    MembershipLookup,
+    TokenVerifier,
+    db_company_creator,
+    db_memberships,
+    resolve_caller,
+    signed_in_user,
+)
 
 DEFAULT_MODEL = "gemini-3.5-flash-lite"     # Nov 9: same 50/50 as Flash, 4x cheaper, 3x faster
 MAX_QUESTION_CHARS = 500
@@ -49,6 +60,10 @@ log = logging.getLogger("dj_inbox.api")
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+
+
+class NewCompany(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
 
 
 class Source(BaseModel):
@@ -138,7 +153,7 @@ def _cost(model: str, tokens_in: int, tokens_out: int) -> float:
 
 def create_app(store: InboxStore | None = None, workflow: Any = None, model: str | None = None,
                cap: DailyCap | None = None, verifier: TokenVerifier | None = None,
-               memberships: MembershipLookup | None = None) -> FastAPI:
+               memberships: MembershipLookup | None = None, create_company: CompanyCreator | None = None) -> FastAPI:
     """Tests pass a small store, a FakeLlm workflow, a cap and (for sign-in) a verifier + membership lookup.
     In production everything loads at startup; sign-in turns on when SUPABASE_URL is set."""
     model = model or os.environ.get("AGENT_MODEL", DEFAULT_MODEL)
@@ -149,10 +164,12 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        nonlocal store, workflow, memberships
-        if verifier is not None and memberships is None:
+        nonlocal store, workflow, memberships, create_company
+        if verifier is not None and memberships is None:           # production: both talk to the database
             from dj_inbox.db import make_pool
-            memberships = db_memberships(make_pool(max_size=2))
+            pool = make_pool(max_size=2)
+            memberships = db_memberships(pool)
+            create_company = create_company or db_company_creator(pool)
         if store is None:
             from dj_inbox.agent.store import load_northshore
             store = load_northshore()
@@ -175,6 +192,13 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
             headers = {"WWW-Authenticate": "Bearer"} if e.status == 401 else None
             raise HTTPException(e.status, e.detail, headers=headers) from None
 
+    def user(authorization: str | None = Header(None)) -> str:
+        try:
+            return signed_in_user(authorization, verifier)
+        except AuthError as e:
+            headers = {"WWW-Authenticate": "Bearer"} if e.status == 401 else None
+            raise HTTPException(e.status, e.detail, headers=headers) from None
+
     def company(who: Caller = Depends(caller)) -> InboxStore:
         """The ONLY way a data endpoint reaches data: the caller's own company."""
         try:
@@ -187,6 +211,28 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
         s = get_store(demo_company)                 # public: describes the demo only
         return {"ok": True, "company": s.company_name, "threads": len(s.threads), "leads": len(s.leads),
                 "model": model}
+
+    @app.get("/me")
+    def me(user_id: str = Depends(user)) -> dict:
+        """What the website needs after sign-in: does this user have a company yet (else: onboarding)?"""
+        if memberships is None:
+            raise HTTPException(401, "Sign-in is not enabled on this server.")
+        companies = memberships(user_id)
+        return {"user_id": user_id, "company_id": companies[0] if companies else None}
+
+    @app.post("/companies", status_code=201)
+    def new_company(body: NewCompany, user_id: str = Depends(user)) -> dict:
+        """Onboarding: create the user's company. The user comes from the token; the database picks the id."""
+        if create_company is None:
+            raise HTTPException(401, "Sign-in is not enabled on this server.")
+        try:
+            company_id = create_company(user_id, body.name)
+        except AlreadyHasCompany:
+            raise HTTPException(409, "You already have a company.") from None
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from None
+        log.info(json.dumps({"event": "company_created", "company_id": company_id}))
+        return {"company_id": company_id}
 
     @app.post("/ask", response_model=AskResponse)
     async def ask(body: AskRequest, s: InboxStore = Depends(company),
