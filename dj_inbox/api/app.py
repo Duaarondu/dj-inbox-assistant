@@ -9,8 +9,10 @@
     GET  /threads/{id}   one thread's emails (what a cited source links to)
     GET  /health         is it up, and what data is loaded (not /healthz: Cloud Run reserves paths ending in z)
 
-company_id: DEMO ONLY, it is fixed on the server (DEMO_COMPANY_ID) and never read from a request. After
-Google sign-in it comes from the verified user. Every endpoint goes through get_store(company_id).
+company_id: never read from a request body or the model. Without an Authorization header a request gets the
+public demo company (DEMO_COMPANY_ID); with "Bearer <Supabase token>" it gets the verified user's company
+(dj_inbox/api/auth.py). A bad token is a 401, never a quiet fall back to the demo. Every data endpoint goes
+through the `company` dependency. Sign-in is on when SUPABASE_URL is set.
 
 Cost guard: a daily question cap (MAX_QUESTIONS_PER_DAY) is checked BEFORE every model call, because the
 demo is public and every question spends credits. In-memory, so deploy with max-instances=1 until there's a DB.
@@ -26,13 +28,14 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from dj_inbox.agent.runtime import RunResult, run_workflow_async
 from dj_inbox.agent.store import InboxStore, get_store
 from dj_inbox.agent.tools import client_label
+from dj_inbox.api.auth import AuthError, Caller, MembershipLookup, TokenVerifier, db_memberships, resolve_caller
 
 DEFAULT_MODEL = "gemini-3.5-flash-lite"     # Nov 9: same 50/50 as Flash, 4x cheaper, 3x faster
 MAX_QUESTION_CHARS = 500
@@ -134,14 +137,22 @@ def _cost(model: str, tokens_in: int, tokens_out: int) -> float:
 # ---------- the app ----------
 
 def create_app(store: InboxStore | None = None, workflow: Any = None, model: str | None = None,
-               cap: DailyCap | None = None) -> FastAPI:
-    """Tests pass a small store, a FakeLlm workflow and a cap. In production everything loads at startup."""
+               cap: DailyCap | None = None, verifier: TokenVerifier | None = None,
+               memberships: MembershipLookup | None = None) -> FastAPI:
+    """Tests pass a small store, a FakeLlm workflow, a cap and (for sign-in) a verifier + membership lookup.
+    In production everything loads at startup; sign-in turns on when SUPABASE_URL is set."""
     model = model or os.environ.get("AGENT_MODEL", DEFAULT_MODEL)
-    company_id = os.environ.get("DEMO_COMPANY_ID", "northshore")
+    demo_company = os.environ.get("DEMO_COMPANY_ID", "northshore")
+    supabase_url = os.environ.get("SUPABASE_URL")
+    if verifier is None and supabase_url:
+        verifier = TokenVerifier(supabase_url)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        nonlocal store, workflow
+        nonlocal store, workflow, memberships
+        if verifier is not None and memberships is None:
+            from dj_inbox.db import make_pool
+            memberships = db_memberships(make_pool(max_size=2))
         if store is None:
             from dj_inbox.agent.store import load_northshore
             store = load_northshore()
@@ -155,25 +166,36 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
     app.state.cap = cap or DailyCap(int(os.environ.get("MAX_QUESTIONS_PER_DAY", "300")))
     origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"],
-                       allow_headers=["Content-Type"])
+                       allow_headers=["Content-Type", "Authorization"])
 
-    def company() -> InboxStore:
-        return get_store(company_id)                # the ONLY way an endpoint reaches data
+    def caller(authorization: str | None = Header(None)) -> Caller:
+        try:
+            return resolve_caller(authorization, verifier, memberships, demo_company)
+        except AuthError as e:
+            headers = {"WWW-Authenticate": "Bearer"} if e.status == 401 else None
+            raise HTTPException(e.status, e.detail, headers=headers) from None
+
+    def company(who: Caller = Depends(caller)) -> InboxStore:
+        """The ONLY way a data endpoint reaches data: the caller's own company."""
+        try:
+            return get_store(who.company_id)
+        except PermissionError:
+            raise HTTPException(404, "No inbox connected yet.") from None
 
     @app.get("/health")
     def health() -> dict:
-        s = company()
+        s = get_store(demo_company)                 # public: describes the demo only
         return {"ok": True, "company": s.company_name, "threads": len(s.threads), "leads": len(s.leads),
                 "model": model}
 
     @app.post("/ask", response_model=AskResponse)
-    async def ask(body: AskRequest) -> AskResponse:
+    async def ask(body: AskRequest, s: InboxStore = Depends(company),
+                  who: Caller = Depends(caller)) -> AskResponse:
         question = body.question.strip()
         if not question:
             raise HTTPException(422, "Question is empty.")
         if not app.state.cap.try_take():            # checked BEFORE any model call
             raise HTTPException(429, "The demo's daily question limit is reached. Try again tomorrow.")
-        s = company()
         try:
             result = await run_workflow_async(workflow, question, s.company_id)
         except Exception as e:
@@ -185,7 +207,8 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
         sources = _cited_sources(raw, result, s)
         cost = _cost(model, result.tokens_in, result.tokens_out)
         log.info(json.dumps({                       # one structured line per question (Cloud Logging reads it)
-            "event": "ask", "company_id": s.company_id, "model": model, "question_chars": len(question),
+            "event": "ask", "company_id": s.company_id, "signed_in": not who.is_demo, "model": model,
+            "question_chars": len(question),
             "tools": [c.name for c in result.tool_calls], "tool_args": [c.args for c in result.tool_calls],
             "email_ids": [x.email_id for x in sources], "model_calls": result.model_calls,
             "tokens_in": result.tokens_in, "tokens_out": result.tokens_out, "cost_usd": round(cost, 6),
@@ -197,8 +220,8 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
 
     @app.get("/leads")
     def leads(status: str | None = Query(None), event_type: str | None = Query(None),
-              source: str | None = Query(None), all_events: bool = Query(False)) -> dict:
-        s = company()
+              source: str | None = Query(None), all_events: bool = Query(False),
+              s: InboxStore = Depends(company)) -> dict:
         filters = {k: v for k, v in {"status": status, "event_type": event_type, "source": source}.items() if v}
         # Default: one row per inquiry (lead_index 0), the same rule as count_leads, so the tracker and the
         # agent agree ("60 cold" in an answer = 60 rows here, not 67 with second events).
@@ -213,8 +236,8 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
         return {"count": len(out), "leads": out}
 
     @app.get("/threads/{thread_id}")
-    def thread(thread_id: str) -> dict:
-        t = company().threads.get(thread_id)
+    def thread(thread_id: str, s: InboxStore = Depends(company)) -> dict:
+        t = s.threads.get(thread_id)
         if t is None:                               # also what another company's thread id gets
             raise HTTPException(404, "No such thread.")
         return {"thread_id": t.thread_id, "subject": t.subject, "client": client_label(t),
