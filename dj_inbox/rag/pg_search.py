@@ -39,6 +39,9 @@ SEARCH_SQL = """
 def top_threads_pg(conn: psycopg.Connection, company_id: str, qvec: np.ndarray, k: int, pool: int = POOL) -> list[str]:
     """Thread ids of the k best threads for this company, best first. Same contract as retrieve.top_threads."""
     with conn.transaction():
+        # Second lock (db/migrations/002): as app_api, RLS shows only rows of the company set here. The WHERE in
+        # SEARCH_SQL stays as the first lock. `true` = this transaction only, so it can't leak to the next request.
+        conn.execute("select set_config('app.company_id', %s, true)", (company_id,))
         conn.execute(f"set local hnsw.ef_search = {int(EF_SEARCH)}")      # only for this transaction
         rows = conn.execute(SEARCH_SQL, {"company_id": company_id, "qvec": qvec, "pool": pool}).fetchall()
     thread_ids: list[str] = []

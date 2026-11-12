@@ -20,3 +20,7 @@ target-version = "py312"
 # E/F: real errors (syntax, undefined or unused names)   I: import order
 # B: likely bugs (mutable defaults, etc.)                UP: modern Python syntax
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's Depends(...) in a parameter default is the framework's normal pattern, not a mutable default.
+extend-immutable-calls = ["fastapi.Depends"]
