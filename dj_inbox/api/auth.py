@@ -101,19 +101,57 @@ def db_memberships(pool) -> MembershipLookup:
     return lookup
 
 
+CompanyCreator = Callable[[str, str], str]      # (verified user_id, name) -> new company_id
+
+
+class AlreadyHasCompany(Exception):
+    pass
+
+
+def signed_in_user(authorization: str | None, verifier: TokenVerifier | None) -> str:
+    """The verified user id. Missing, malformed or bad token -> 401 (here sign-in is required, no demo)."""
+    if authorization is None:
+        raise AuthError(401, "Sign in first.")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise AuthError(401, "Invalid sign-in token.")
+    if verifier is None:                            # sign-in not configured on this server: refuse, don't guess
+        raise AuthError(401, "Sign-in is not enabled on this server.")
+    return verifier.verify(token.strip())["sub"]
+
+
+def create_company_in_db(conn, user_id: str, name: str) -> str:
+    """Calls the create_company() function (migration 004) as the verified user. The user id goes in through
+    app.user_id for this transaction only; the function itself picks the new company id."""
+    import psycopg
+
+    try:
+        with conn.transaction():
+            conn.execute("select set_config('app.user_id', %s, true)", (user_id,))
+            return conn.execute("select create_company(%s)", (name,)).fetchone()[0]
+    except psycopg.errors.UniqueViolation:
+        raise AlreadyHasCompany from None
+    except psycopg.errors.InvalidParameterValue as e:
+        raise ValueError("Company name must be 1 to 120 characters.") from e
+
+
+def db_company_creator(pool) -> CompanyCreator:
+    def create(user_id: str, name: str) -> str:
+        with pool.connection() as conn:
+            return create_company_in_db(conn, user_id, name)
+    return create
+
+
 def resolve_caller(authorization: str | None, verifier: TokenVerifier | None, lookup: MembershipLookup | None,
                    demo_company: str) -> Caller:
     if authorization is None:
         return Caller(company_id=demo_company, user_id=None)
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise AuthError(401, "Invalid sign-in token.")
-    if verifier is None or lookup is None:          # sign-in not configured on this server: refuse, don't guess
+    if lookup is None:
         raise AuthError(401, "Sign-in is not enabled on this server.")
-    claims = verifier.verify(token.strip())
-    companies = lookup(claims["sub"])
+    user_id = signed_in_user(authorization, verifier)
+    companies = lookup(user_id)
     if not companies:
         raise AuthError(403, "No company yet. Finish setting up your account.")
     # A user in several companies gets the first one for now; a company switcher will pass the wanted id,
     # checked against this same list.
-    return Caller(company_id=companies[0], user_id=claims["sub"])
+    return Caller(company_id=companies[0], user_id=user_id)
