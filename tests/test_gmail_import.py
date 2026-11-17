@@ -115,6 +115,16 @@ def test_a_new_reply_reprocesses_only_its_thread_in_full(conn):
     assert len(later.embedded) == n_t003                         # the whole thread, not just the new email
 
 
+def test_newest_emails_first_still_gives_each_thread_its_first_subject(conn):
+    """A partial import (--limit) brings the newest emails, so "Re: ..." arrives before the original subject."""
+    items = as_gmail(THREADS)
+    run(conn, items[-6:], Fakes())                               # the newest few first
+    run(conn, items, Fakes())                                    # then everything
+    _, stored, _ = load_inbox(conn, "co-a")
+    expected = {"G" + t.thread_id: t.subject for t in read_mbox(MBOX, COMPANY) if t.thread_id in THREADS}
+    assert {t.thread_id: t.subject for t in stored} == expected
+
+
 def test_import_only_writes_the_given_company(conn):
     run(conn, as_gmail(THREADS), Fakes(), company_id="co-a")
     conn.execute("reset role")

@@ -60,6 +60,13 @@ def save_threads(conn: psycopg.Connection, company_id: str, threads: list[EmailT
                              Jsonb(m.contacts.model_dump())))
                 if cur.rowcount:
                     changed.add(t.thread_id)
+        # A thread's subject is its OLDEST email's subject (as in read_messages). Emails can arrive newest
+        # first (a partial import, or a reply before the rest), so recompute it whenever a thread changes.
+        cur.execute("""update threads t
+                          set subject = (select e.subject from emails e
+                                          where e.company_id = t.company_id and e.thread_id = t.thread_id
+                                          order by e.sent_at, e.message_id limit 1)
+                        where t.company_id = %s and t.thread_id = any(%s)""", (company_id, list(changed)))
     return changed
 
 
@@ -103,7 +110,7 @@ def load_inbox(conn: psycopg.Connection, company_id: str) -> tuple[str, list[Ema
             message_id=mid, thread_id=tid, sent_at=sent_at.astimezone(timezone(timedelta(minutes=offset))),
             sender_role=role, sender_name=sname, sender_email=semail,
             subject=subject, body_raw=raw, body_clean=clean, contacts=Contacts.model_validate(contacts)))
-    threads = [EmailThread(thread_id=tid, subject=subjects.get(tid, msgs[0].subject), messages=msgs)
+    threads = [EmailThread(thread_id=tid, subject=subjects.get(tid) or msgs[0].subject, messages=msgs)
                for tid, msgs in by_thread.items()]
     threads.sort(key=lambda t: t.messages[0].sent_at)
     leads = [{"thread_id": tid, "lead_index": i, **ExtractedLead.model_validate(fields).model_dump(), "source": src}
