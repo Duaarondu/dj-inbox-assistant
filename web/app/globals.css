@@ -73,6 +73,13 @@ tbody tr:hover, tbody tr:focus { background: var(--accent-soft); outline: none; 
 .citedTag { margin-left: 8px; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: #fff; }
 .body { margin: 0; white-space: pre-wrap; }
 
+.narrow { max-width: 520px; }
+.narrow h1 { margin: 0 0 6px; font-size: 24px; }
+.headRow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.headRow a, .narrow a { color: var(--accent); }
+.primary { padding: 10px 18px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; margin: 8px 0; }
+.narrow .askForm { margin: 12px 0; }
+
 .footer { margin-top: 12px; text-align: center; }
 
 @media (max-width: 640px) {

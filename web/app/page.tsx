@@ -4,6 +4,8 @@
 // Email text is untrusted: it is always rendered as plain React text, never as HTML.
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import Link from "next/link";
+
 import { ask, AskResponse, getLeads, getThread, Lead, Thread } from "@/lib/api";
 
 const EXAMPLES = [
@@ -81,7 +83,10 @@ export default function Home() {
   return (
     <main className="page">
       <header className="header">
-        <h1>Ask your inbox</h1>
+        <div className="headRow">
+          <h1>Ask your inbox</h1>
+          <Link href="/signin">Sign in to use your own inbox</Link>
+        </div>
         <p className="sub">
           Demo for <strong>Northshore Sound Co.</strong>, a fictional DJ company with a synthetic inbox of 200
           email threads. Every answer links to the emails it came from.

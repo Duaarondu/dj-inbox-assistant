@@ -34,7 +34,7 @@ export type Lead = {
 export type ThreadEmail = { email_id: string; sent_at: string; sender_role: string; sender: string; body: string };
 export type Thread = { thread_id: string; subject: string; client: string; emails: ThreadEmail[] };
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+async function call<T>(path: string, init?: RequestInit, messages: Record<number, string> = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, init);
@@ -44,20 +44,37 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const detail = typeof body?.detail === "string" ? body.detail : null;
+    if (messages[res.status]) throw new Error(messages[res.status]);
     if (res.status === 429) throw new Error(detail ?? "The demo's daily question limit is reached.");
-    if (res.status === 422) throw new Error("Please type a question (up to 500 characters).");
     throw new Error(detail ?? `Something went wrong (HTTP ${res.status}).`);
   }
   return res.json() as Promise<T>;
 }
 
+const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+
 export const ask = (question: string) =>
-  call<AskResponse>("/ask", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
-  });
+  call<AskResponse>(
+    "/ask",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) },
+    { 422: "Please type a question (up to 500 characters)." },
+  );
 
 export const getLeads = () => call<{ count: number; leads: Lead[] }>("/leads");
 
 export const getThread = (threadId: string) => call<Thread>(`/threads/${encodeURIComponent(threadId)}`);
+
+// Signed-in calls: the Supabase access token goes in the Authorization header on every request.
+// The server takes the user (and company) from the verified token, never from the request body.
+export type Me = { user_id: string; company_id: string | null };
+
+const SESSION_EXPIRED = "Your sign-in expired. Please sign in again.";
+
+export const getMe = (token: string) => call<Me>("/me", { headers: bearer(token) }, { 401: SESSION_EXPIRED });
+
+export const createCompany = (token: string, name: string) =>
+  call<{ company_id: string }>(
+    "/companies",
+    { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ name }) },
+    { 401: SESSION_EXPIRED, 409: "You already have a company.", 422: "Please enter a company name (up to 120 characters)." },
+  );
