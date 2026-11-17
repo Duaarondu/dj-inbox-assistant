@@ -125,6 +125,15 @@ def test_newest_emails_first_still_gives_each_thread_its_first_subject(conn):
     assert {t.thread_id: t.subject for t in stored} == expected
 
 
+def test_a_rerun_can_skip_what_is_already_stored(conn):
+    from dj_inbox.db.inbox import stored_gmail_ids
+
+    items = as_gmail(THREADS)
+    run(conn, items[:10], Fakes())
+    assert stored_gmail_ids(conn, "co-a") == {g for _, _, g in items[:10]}
+    assert stored_gmail_ids(conn, "co-b") == set()
+
+
 def test_import_only_writes_the_given_company(conn):
     run(conn, as_gmail(THREADS), Fakes(), company_id="co-a")
     conn.execute("reset role")

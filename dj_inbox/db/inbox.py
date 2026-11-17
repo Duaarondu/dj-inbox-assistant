@@ -70,6 +70,14 @@ def save_threads(conn: psycopg.Connection, company_id: str, threads: list[EmailT
     return changed
 
 
+def stored_gmail_ids(conn: psycopg.Connection, company_id: str) -> set[str]:
+    """Gmail ids already imported for this company, so a rerun fetches only what's missing."""
+    with company_tx(conn, company_id):
+        rows = conn.execute("select gmail_id from emails where company_id = %s and gmail_id is not null",
+                            (company_id,)).fetchall()
+    return {r[0] for r in rows}
+
+
 def save_chunks(conn: psycopg.Connection, company_id: str, chunks: list[Chunk], vectors: np.ndarray) -> int:
     with company_tx(conn, company_id):
         return load_chunks(conn, company_id, chunks, vectors)

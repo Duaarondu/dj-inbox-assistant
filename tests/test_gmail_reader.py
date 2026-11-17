@@ -52,8 +52,53 @@ def test_list_follows_pages_and_sends_the_filter():
 def test_rate_limits_are_retried_then_succeed():
     gmail = FakeGmail({"messages": [Resp(429), Resp(503), Resp(200, {"messages": [{"id": "a"}]})]})
     waits: list[float] = []
-    assert GmailReader(gmail, sleep=waits.append).list_ids() == ["a"]
+    assert GmailReader(gmail, sleep=waits.append, min_interval=0).list_ids() == ["a"]
     assert len(waits) == 2
+
+
+def rate_limited() -> Resp:
+    return Resp(403, {"error": {"code": 403, "errors": [{"reason": "userRateLimitExceeded"}]}})
+
+
+def test_gmails_403_rate_limit_is_retried():
+    """Gmail says "slow down" with a 403 + reason, not only 429 (seen Nov 17 on the full 942-message import)."""
+    gmail = FakeGmail({"m1": [rate_limited(), rate_limited(),
+                              Resp(200, {"id": "m1", "threadId": "T1", "raw": raw_email("<m1@x>", "k@x", "S", "B")})]})
+    waits: list[float] = []
+    assert GmailReader(gmail, sleep=waits.append, min_interval=0).get("m1")[1] == "T1"
+    assert len(waits) == 2
+
+
+def test_requests_are_paced_across_threads():
+    clock = [0.0]
+    waits: list[float] = []
+    reader = GmailReader(None, sleep=waits.append, min_interval=0.1, clock=lambda: clock[0])
+    for _ in range(3):
+        reader._pace()                       # three requests at the same instant
+    assert waits == pytest.approx([0.1, 0.2])
+
+
+def test_retry_after_from_gmail_is_respected():
+    slow = Resp(429)
+    slow.headers = {"Retry-After": "7"}
+    gmail = FakeGmail({"messages": [slow, Resp(200, {"messages": []})]})
+    waits: list[float] = []
+    GmailReader(gmail, sleep=waits.append, min_interval=0).list_ids()
+    assert waits == [7.0]
+
+
+def test_progress_is_reported():
+    raw = raw_email("<m@x>", "k@x", "S", "B")
+    gmail = FakeGmail({f"m{i}": [Resp(200, {"id": f"m{i}", "threadId": "T", "raw": raw})] for i in range(3)})
+    lines: list[str] = []
+    GmailReader(gmail, min_interval=0, progress=lines.append).fetch(["m0", "m1", "m2"])
+    assert lines and "3/3" in lines[-1]
+
+
+def test_a_permission_403_is_not_retried_and_names_the_reason():
+    gmail = FakeGmail({"messages": [Resp(403, {"error": {"errors": [{"reason": "insufficientPermissions"}]}})]})
+    with pytest.raises(GmailError, match="insufficientPermissions"):
+        GmailReader(gmail, sleep=lambda s: pytest.fail("must not retry")).list_ids()
 
 
 def test_a_real_error_stops_and_says_nothing_secret():

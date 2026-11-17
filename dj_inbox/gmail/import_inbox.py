@@ -24,7 +24,7 @@ from email.message import EmailMessage
 
 import psycopg
 
-from dj_inbox.db.inbox import load_inbox, save_chunks, save_leads, save_threads
+from dj_inbox.db.inbox import load_inbox, save_chunks, save_leads, save_threads, stored_gmail_ids
 from dj_inbox.extract.extract import PROMPT_VERSION, ThreadLeads, source
 from dj_inbox.ingest import CompanyConfig, EmailThread, read_messages
 from dj_inbox.rag.chunk import chunk_inbox
@@ -97,16 +97,18 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"Signed in as {who or 'unknown'}, not {account}. Nothing was read.")
 
     start = time.perf_counter()
-    reader = GmailReader(session)
+    reader = GmailReader(session, progress=print)
     ids = reader.list_ids(IMPORT_QUERY, limit=args.limit)
-    print(f"{len(ids)} messages match `{IMPORT_QUERY}`; fetching...")
-    items = reader.fetch(ids)
-    print(f"fetched {len(items)} in {time.perf_counter() - start:.0f}s ({reader.calls} Gmail calls)")
-
     client = gemini_client()
     embedder = Embedder(client, cache_dir=ROOT / "data" / "embeddings")         # cache: same text = no new call
     company = CompanyConfig(domains=args.company_domain, addresses=[account])
     with connect(database_url("DATABASE_INGEST_URL")) as conn:
+        have = stored_gmail_ids(conn, args.company)
+        todo = [i for i in ids if i not in have]
+        print(f"{len(ids)} messages match `{IMPORT_QUERY}`; {len(ids) - len(todo)} already imported; "
+              f"fetching {len(todo)}...")
+        items = reader.fetch(todo)
+        print(f"fetched {len(items)} in {time.perf_counter() - start:.0f}s ({reader.calls} Gmail calls)")
         stats = import_messages(
             conn, args.company, items, company,
             embed=lambda texts: embedder.embed(texts, "RETRIEVAL_DOCUMENT"),
