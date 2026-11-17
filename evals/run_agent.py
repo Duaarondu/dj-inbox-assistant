@@ -119,14 +119,24 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="only the first N questions")
     ap.add_argument("--max-cost", type=float, default=1.00)
     ap.add_argument("--questions", choices=sorted(QUESTION_SETS), default="v1")
+    ap.add_argument("--company", help="a Gmail-imported company_id: read its inbox from Postgres as app_api "
+                    "(DATABASE_API_URL in .env), like production does. Default: the demo inbox from files")
     args = ap.parse_args()
 
-    store = load_northshore()                             # registers the company; tools find it via the session
+    if args.company:
+        from dj_inbox.agent.store import STATUS_TODAY, load_company, query_embedder, register
+        from dj_inbox.db import database_url, make_pool
+        store = load_company(make_pool(database_url("DATABASE_API_URL")), args.company, STATUS_TODAY,
+                             query_embedder())
+        register(store)
+        print(f"{store.company_name}: {len(store.threads)} threads, {len(store.leads)} leads (from Postgres)")
+    else:
+        store = load_northshore()                         # registers the company; tools find it via the session
     with QUESTION_SETS[args.questions].open(encoding="utf-8") as fh:
         questions = [Question.model_validate_json(line) for line in fh][: args.limit]
 
     RESULTS.mkdir(exist_ok=True)
-    tag = "" if args.questions == "v1" else f"-{args.questions}"
+    tag = ("" if args.questions == "v1" else f"-{args.questions}") + ("-gmail" if args.company else "")
     out = RESULTS / f"agent{tag}-{args.model}-{datetime.now():%Y%m%d-%H%M}.jsonl"
     workflow = build_workflow(args.model, store.company_name, TODAY)
     rows = run(workflow, args.model, questions, args.max_cost, out=out, company_id=store.company_id)

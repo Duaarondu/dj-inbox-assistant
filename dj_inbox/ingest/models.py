@@ -14,6 +14,9 @@ class CompanyConfig(BaseModel):
     """What the reader needs to know about the company whose inbox this is."""
     domains: list[str]                                   # e.g. ["northshoresound.example"]
     form_senders: list[str] = Field(default_factory=lambda: ["noreply", "no-reply", "forms"])
+    # Exact addresses that are the company, for a company on a shared domain such as gmail.com (where
+    # "everyone at the domain" would wrongly make every client the company). E.g. the connected Gmail account.
+    addresses: list[str] = Field(default_factory=list)
 
     def is_form(self, address: str) -> bool:
         """True for the company's own website-form address, e.g. noreply@northshoresound.example."""
@@ -21,6 +24,8 @@ class CompanyConfig(BaseModel):
         return domain in {d.lower() for d in self.domains} and local in self.form_senders
 
     def role_of(self, address: str) -> SenderRole:
+        if address.lower() in {a.lower() for a in self.addresses}:
+            return "company"
         local, _, domain = address.lower().partition("@")
         if domain in {d.lower() for d in self.domains} and local not in self.form_senders:
             return "company"
