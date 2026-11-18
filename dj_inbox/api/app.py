@@ -189,8 +189,8 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
             from dj_inbox.gmail.connect import ConnectConfig, db_gmail_connector
             gmail_cfg = ConnectConfig.from_env()
             if gmail is None and gmail_cfg is not None:
-                gmail = db_gmail_connector(gmail_cfg, pool, enqueue_import=lambda company_id: log.info(json.dumps(
-                    {"event": "gmail_import_requested", "company_id": company_id})))   # worker: next step
+                from dj_inbox.gmail.tasks import enqueue_from_env
+                gmail = db_gmail_connector(gmail_cfg, pool, enqueue_import=enqueue_from_env())
         if store is None:
             from dj_inbox.agent.store import load_northshore
             store = load_northshore()
@@ -285,6 +285,14 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
             raise HTTPException(e.status, e.detail) from None
         log.info(json.dumps({"event": "gmail_connected", "company_id": who.company_id}))
         return {"gmail_address": address, "status": "importing"}
+
+    @app.post("/gmail/sync")
+    def gmail_sync(who: Caller = Depends(owner_session), g: GmailConnector = Depends(connector)) -> dict:
+        """'Sync again': queue an import of whatever isn't stored yet (cheap when nothing is new)."""
+        if g.status(who.company_id) is None:
+            raise HTTPException(404, "Connect Gmail first.")
+        g.sync(who.company_id)
+        return {"status": "importing"}
 
     @app.get("/gmail/status")
     def gmail_status(who: Caller = Depends(owner_session), g: GmailConnector = Depends(connector)) -> dict:

@@ -105,3 +105,6 @@ export const finishGmailConnect = (token: string, code: string, state: string) =
     { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ code, state }) },
     { 401: SESSION_EXPIRED },
   );
+
+export const syncGmail = (token: string) =>
+  call<{ status: string }>("/gmail/sync", { method: "POST", headers: bearer(token) }, { 401: SESSION_EXPIRED });

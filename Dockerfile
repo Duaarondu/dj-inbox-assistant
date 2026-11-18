@@ -24,5 +24,6 @@ COPY data/embeddings/vectors.json ./data/embeddings/vectors.json
 RUN useradd --create-home app && chown -R app /app
 USER app
 
-# Cloud Run sets $PORT (8080 by default).
-CMD ["sh", "-c", "exec uvicorn dj_inbox.api.app:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Cloud Run sets $PORT (8080 by default). The same image runs the private worker with
+# APP_MODULE=dj_inbox.worker.app:app (scripts/deploy_worker.sh).
+CMD ["sh", "-c", "exec uvicorn ${APP_MODULE:-dj_inbox.api.app:app} --host 0.0.0.0 --port ${PORT:-8080}"]

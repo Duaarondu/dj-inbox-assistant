@@ -20,13 +20,17 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
+import re
 import secrets
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib.parse import urlencode
+
+log = logging.getLogger("dj_inbox.api")
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -35,6 +39,7 @@ REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 PROFILE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
 KMS_URL = "https://cloudkms.googleapis.com/v1/{key}:encrypt"
 STATE_TTL_S = 600
+CLIENT_ID = re.compile(r"^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$")
 
 
 class ConnectError(Exception):
@@ -60,6 +65,8 @@ class ConnectConfig:
         if not all(values):
             return None
         client_id, client_secret, state_secret, uris, key = values
+        if not CLIENT_ID.match(client_id):
+            raise SystemExit("GMAIL_CLIENT_ID isn't a Google OAuth client id (…apps.googleusercontent.com).")
         return cls(client_id, client_secret, state_secret.encode(),
                    tuple(u.strip() for u in uris.split(",") if u.strip()), key)
 
@@ -122,6 +129,8 @@ class GoogleOAuth:
                                                "redirect_uri": redirect_uri, "grant_type": "authorization_code"},
                               timeout=30)
         if resp.status_code != 200:
+            log.warning(json.dumps({"event": "gmail_code_exchange_failed", "http": resp.status_code,
+                                    "google_error": _error_code(resp)}))       # e.g. invalid_client, never a token
             raise ConnectError(400, "Google didn't accept the sign-in code (it may have been used already). "
                                     "Start again from Connect Gmail.")
         return resp.json()
@@ -137,6 +146,13 @@ class GoogleOAuth:
             self.http.post(REVOKE_URL, data={"token": token}, timeout=10)
         except Exception:
             pass                           # best effort: we're already refusing this connection
+
+
+def _error_code(resp) -> str:
+    try:
+        return str(resp.json().get("error", ""))[:60]
+    except Exception:
+        return ""
 
 
 class Kms:
@@ -231,6 +247,9 @@ class GmailConnector:
 
     def status(self, company_id: str) -> dict | None:
         return self._status(company_id)
+
+    def sync(self, company_id: str) -> None:
+        self._enqueue(company_id)
 
 
 def db_gmail_connector(cfg: ConnectConfig, pool, enqueue_import: Callable[[str], None]) -> GmailConnector:

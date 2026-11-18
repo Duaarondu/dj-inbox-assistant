@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { createCompany, getGmailStatus, getMe, GmailStatus, Me, startGmailConnect } from "@/lib/api";
+import { createCompany, getGmailStatus, getMe, GmailStatus, Me, startGmailConnect, syncGmail } from "@/lib/api";
 import { accessToken, supabase } from "@/lib/supabase/client";
 
 export default function Setup() {
@@ -38,6 +38,30 @@ export default function Setup() {
       .then((g) => g && setGmail(g))
       .catch((e: Error) => setError(e.message));
   }, [me?.company_id]);
+
+  // While an import runs, check again every 5 seconds until it's done.
+  useEffect(() => {
+    if (gmail?.status !== "importing") return;
+    const timer = setInterval(() => {
+      accessToken()
+        .then((token) => (token ? getGmailStatus(token) : null))
+        .then((g) => g && setGmail(g))
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [gmail?.status]);
+
+  async function syncAgain() {
+    setError(null);
+    try {
+      const token = await accessToken();
+      if (!token) return window.location.replace("/signin");
+      await syncGmail(token);
+      setGmail((g) => (g ? { ...g, status: "importing", error: null } : g));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   async function connectGmail() {
     setConnecting(true);
@@ -111,8 +135,9 @@ export default function Setup() {
             {gmail?.connected ? (
               <p className="muted">
                 Gmail: <strong>{gmail.gmail_address}</strong> ·{" "}
-                {gmail.status === "importing" && "importing your emails…"}
-                {gmail.status === "ready" && "up to date"}
+                {gmail.status === "importing" && (gmail.error ?? "importing your emails…")}
+                {gmail.status === "ready" &&
+                  `up to date${gmail.last_import_at ? ` (synced ${new Date(gmail.last_import_at).toLocaleTimeString()})` : ""}`}
                 {gmail.status === "error" && `import failed: ${gmail.error ?? "unknown error"}`}
                 {gmail.status === "disconnected" && "disconnected"}
               </p>
@@ -121,6 +146,11 @@ export default function Setup() {
                 Next: connect Gmail so we can build your lead tracker. We only ask to <strong>read</strong> your
                 email; spam, promotions and social mail are skipped.
               </p>
+            )}
+            {gmail?.connected && gmail.status === "ready" && (
+              <button className="primary" onClick={syncAgain}>
+                Sync again
+              </button>
             )}
             {(!gmail?.connected || gmail.status === "error") && (
               <button className="primary" onClick={connectGmail} disabled={connecting || !gmail}>
