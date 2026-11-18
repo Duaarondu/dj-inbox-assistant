@@ -12,6 +12,7 @@ import email
 import hashlib
 import mailbox
 import re
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from email import policy
 from email.message import EmailMessage
@@ -27,21 +28,39 @@ SUBJECT_WINDOW = timedelta(days=30)
 
 
 def _load(f) -> EmailMessage:
-    # Exports written on Windows use \r\n line endings, and Python's mailbox module there leaves a blank
-    # line after the "From " separator, which makes the parser see an email with no headers.
-    data = f.read().replace(b"\r\n", b"\n").lstrip(b"\n")
-    return email.message_from_bytes(data, policy=policy.default)
+    return parse_raw(f.read())
+
+
+def parse_raw(data: bytes) -> EmailMessage:
+    """One RFC 822 email (an mbox entry, or Gmail's format=raw) as a message object.
+    Exports written on Windows (and Gmail's raw format) use \r\n line endings, and Python's mailbox module on
+    Windows leaves a blank line after the "From " separator, which makes the parser see an email with no headers."""
+    return email.message_from_bytes(data.replace(b"\r\n", b"\n").lstrip(b"\n"), policy=policy.default)
 
 
 def read_mbox(path: Path, company: CompanyConfig) -> list[EmailThread]:
     box = mailbox.mbox(str(path), factory=_load, create=False)
-    raw = [_parse(msg, company) for msg in box]
+    threads, _ = read_messages(((msg, None, None) for msg in box), company)
+    return threads
+
+
+def read_messages(items: Iterable[tuple[EmailMessage, str | None, str | None]],
+                  company: CompanyConfig) -> tuple[list[EmailThread], dict[str, str]]:
+    """Threads from parsed emails, each given as (message, gmail_thread_id, gmail_id).
+
+    A Gmail thread id from the Gmail API wins over every header (a raw message's own X-GM-THRID is just text
+    the sender could have written). Returns the threads and {message_id: gmail_id} for messages that have one.
+    """
+    raw = [_parse(msg, company, thread, gmail_id) for msg, thread, gmail_id in items]
     raw.sort(key=lambda r: r["sent_at"])
+    gmail_ids = {r["message_id"]: r["gmail_id"] for r in raw if r["gmail_id"]}
 
     thread_of: dict[str, str] = {}                        # message_id -> thread key
     by_subject: dict[tuple[str, str], tuple[str, datetime]] = {}
     threads: dict[str, list[Email]] = {}
     for r in raw:
+        if r["message_id"] in thread_of:                  # the same email twice (e.g. listed twice): keep one
+            continue
         key = _thread_key(r, thread_of, by_subject)
         thread_of[r["message_id"]] = key
         by_subject[(r["norm_subject"], r["client_address"])] = (key, r["sent_at"])
@@ -53,10 +72,11 @@ def read_mbox(path: Path, company: CompanyConfig) -> list[EmailThread]:
     out = [EmailThread(thread_id=_thread_id(k), subject=msgs[0].subject, messages=msgs)
            for k, msgs in threads.items()]
     out.sort(key=lambda t: t.messages[0].sent_at)
-    return out
+    return out, gmail_ids
 
 
-def _parse(msg: EmailMessage, company: CompanyConfig) -> dict:
+def _parse(msg: EmailMessage, company: CompanyConfig, gmail_thread: str | None = None,
+           gmail_id: str | None = None) -> dict:
     sender_name, sender_email = parseaddr(str(msg.get("From", "")))
     sender_email = sender_email.lower()
     recipients = [a.lower() for _, a in getaddresses([str(msg.get("To", ""))]) if a]
@@ -76,7 +96,7 @@ def _parse(msg: EmailMessage, company: CompanyConfig) -> dict:
     return {
         "message_id": message_id, "sent_at": _date(msg), "role": role, "sender_name": sender_name or sender_email,
         "sender_email": sender_email, "subject": subject, "body": body, "clean": clean, "contacts": contacts,
-        "gmail_thread": str(msg.get("X-GM-THRID", "")).strip(), "refs": refs,
+        "gmail_thread": gmail_thread or str(msg.get("X-GM-THRID", "")).strip(), "gmail_id": gmail_id, "refs": refs,
         "norm_subject": SUBJECT_PREFIX.sub("", subject).strip().lower(), "client_address": client_address,
     }
 

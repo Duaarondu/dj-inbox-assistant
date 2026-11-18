@@ -1,7 +1,8 @@
 # dj_inbox/db/api_role.py
 """Give the API's database login (app_api, from migration 002) a password, and write its connection URL to .env.
 
-    python -m dj_inbox.db.api_role            (run once; run again to rotate the password)
+    python -m dj_inbox.db.api_role                       (app_api -> DATABASE_API_URL; again = rotate the password)
+    python -m dj_inbox.db.api_role --role app_ingest     (the import worker's role -> DATABASE_INGEST_URL)
 
 - Connects with your OWNER DATABASE_URL (from .env) to run ALTER ROLE.
 - The new password is random (32 bytes) and is sent to Postgres already hashed (SCRAM-SHA-256), so the plain
@@ -26,6 +27,7 @@ from psycopg import sql
 
 ROLE = "app_api"
 ITERATIONS = 4096
+ENV_NAMES = {"app_api": "DATABASE_API_URL", "app_ingest": "DATABASE_INGEST_URL"}    # only these roles
 
 
 def scram_sha256(password: str, salt: bytes | None = None, iterations: int = ITERATIONS) -> str:
@@ -60,20 +62,27 @@ def write_env_var(env_path: Path, name: str, value: str) -> None:
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
     from dj_inbox.db import connect, database_url
     from dj_inbox.gcp import ROOT
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--role", default=ROLE, choices=sorted(ENV_NAMES))
+    role = ap.parse_args(argv).role
+    env_name = ENV_NAMES[role]
 
     owner_url = database_url()
     password = secrets.token_urlsafe(32)
     with connect(owner_url, vectors=False) as conn:
-        exists = conn.execute("select 1 from pg_roles where rolname = %s", (ROLE,)).fetchone()
+        exists = conn.execute("select 1 from pg_roles where rolname = %s", (role,)).fetchone()
         if not exists:
-            raise SystemExit("app_api doesn't exist yet: run `python -m dj_inbox.db.migrate` first.")
+            raise SystemExit(f"{role} doesn't exist yet: run `python -m dj_inbox.db.migrate` first.")
         conn.execute(sql.SQL("alter role {} with login password {}").format(
-            sql.Identifier(ROLE), sql.Literal(scram_sha256(password))))
-    write_env_var(ROOT / ".env", "DATABASE_API_URL", api_url(owner_url, password))
-    print(f"{ROLE}: login enabled with a new random password; DATABASE_API_URL written to .env (not printed).")
+            sql.Identifier(role), sql.Literal(scram_sha256(password))))
+    write_env_var(ROOT / ".env", env_name, api_url(owner_url, password, role))
+    print(f"{role}: login enabled with a new random password; {env_name} written to .env (not printed).")
 
 
 if __name__ == "__main__":

@@ -170,6 +170,10 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
             pool = make_pool(max_size=2)
             memberships = db_memberships(pool)
             create_company = create_company or db_company_creator(pool)
+            # Signed-in companies' imported inboxes: loaded from Postgres on first use, reloaded after a TTL.
+            from dj_inbox.agent.store import STATUS_TODAY, load_company, query_embedder, set_loader
+            embed_query = query_embedder()
+            set_loader(lambda company_id: load_company(pool, company_id, STATUS_TODAY, embed_query))
         if store is None:
             from dj_inbox.agent.store import load_northshore
             store = load_northshore()
