@@ -78,3 +78,30 @@ export const createCompany = (token: string, name: string) =>
     { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ name }) },
     { 401: SESSION_EXPIRED, 409: "You already have a company.", 422: "Please enter a company name (up to 120 characters)." },
   );
+
+// Connect Gmail (read-only). The API signs a `state` for this user + company; Google sends the browser back to
+// /gmail/callback, which hands the code and state to the API. Tokens never pass through this site's code.
+export type GmailStatus = {
+  connected: boolean;
+  gmail_address?: string;
+  status?: "importing" | "ready" | "error" | "disconnected";
+  error?: string | null;
+  last_import_at?: string | null;
+};
+
+export const getGmailStatus = (token: string) =>
+  call<GmailStatus>("/gmail/status", { headers: bearer(token) }, { 401: SESSION_EXPIRED });
+
+export const startGmailConnect = (token: string, redirectUri: string) =>
+  call<{ url: string }>(
+    "/gmail/connect",
+    { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ redirect_uri: redirectUri }) },
+    { 401: SESSION_EXPIRED },
+  );
+
+export const finishGmailConnect = (token: string, code: string, state: string) =>
+  call<{ gmail_address: string; status: string }>(
+    "/gmail/connect/finish",
+    { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ code, state }) },
+    { 401: SESSION_EXPIRED },
+  );

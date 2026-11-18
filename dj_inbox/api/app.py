@@ -47,6 +47,7 @@ from dj_inbox.api.auth import (
     resolve_caller,
     signed_in_user,
 )
+from dj_inbox.gmail.connect import ConnectError, GmailConnector
 
 DEFAULT_MODEL = "gemini-3.5-flash-lite"     # Nov 9: same 50/50 as Flash, 4x cheaper, 3x faster
 MAX_QUESTION_CHARS = 500
@@ -64,6 +65,15 @@ class AskRequest(BaseModel):
 
 class NewCompany(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+
+
+class GmailConnectStart(BaseModel):
+    redirect_uri: str = Field(min_length=1, max_length=300)      # checked against an exact allow list
+
+
+class GmailConnectFinish(BaseModel):
+    code: str = Field(min_length=1, max_length=2000)
+    state: str = Field(min_length=1, max_length=2000)
 
 
 class Source(BaseModel):
@@ -153,7 +163,8 @@ def _cost(model: str, tokens_in: int, tokens_out: int) -> float:
 
 def create_app(store: InboxStore | None = None, workflow: Any = None, model: str | None = None,
                cap: DailyCap | None = None, verifier: TokenVerifier | None = None,
-               memberships: MembershipLookup | None = None, create_company: CompanyCreator | None = None) -> FastAPI:
+               memberships: MembershipLookup | None = None, create_company: CompanyCreator | None = None,
+               gmail: GmailConnector | None = None) -> FastAPI:
     """Tests pass a small store, a FakeLlm workflow, a cap and (for sign-in) a verifier + membership lookup.
     In production everything loads at startup; sign-in turns on when SUPABASE_URL is set."""
     model = model or os.environ.get("AGENT_MODEL", DEFAULT_MODEL)
@@ -164,7 +175,7 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        nonlocal store, workflow, memberships, create_company
+        nonlocal store, workflow, memberships, create_company, gmail
         if verifier is not None and memberships is None:           # production: both talk to the database
             from dj_inbox.db import make_pool
             pool = make_pool(max_size=2)
@@ -174,6 +185,12 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
             from dj_inbox.agent.store import STATUS_TODAY, load_company, query_embedder, set_loader
             embed_query = query_embedder()
             set_loader(lambda company_id: load_company(pool, company_id, STATUS_TODAY, embed_query))
+            # Connect Gmail: on when its settings exist (GMAIL_* env vars from Secret Manager).
+            from dj_inbox.gmail.connect import ConnectConfig, db_gmail_connector
+            gmail_cfg = ConnectConfig.from_env()
+            if gmail is None and gmail_cfg is not None:
+                gmail = db_gmail_connector(gmail_cfg, pool, enqueue_import=lambda company_id: log.info(json.dumps(
+                    {"event": "gmail_import_requested", "company_id": company_id})))   # worker: next step
         if store is None:
             from dj_inbox.agent.store import load_northshore
             store = load_northshore()
@@ -237,6 +254,42 @@ def create_app(store: InboxStore | None = None, workflow: Any = None, model: str
             raise HTTPException(422, str(e)) from None
         log.info(json.dumps({"event": "company_created", "company_id": company_id}))
         return {"company_id": company_id}
+
+    def owner_session(who: Caller = Depends(caller)) -> Caller:
+        """Connect Gmail needs a signed-in user with a company (never the public demo)."""
+        if who.is_demo:
+            raise HTTPException(401, "Sign in first.", headers={"WWW-Authenticate": "Bearer"})
+        return who
+
+    def connector() -> GmailConnector:
+        if gmail is None:
+            raise HTTPException(503, "Connecting Gmail isn't set up on this server yet.")
+        return gmail
+
+    @app.post("/gmail/connect")
+    def gmail_connect(body: GmailConnectStart, who: Caller = Depends(owner_session),
+                      g: GmailConnector = Depends(connector)) -> dict:
+        """Step 1: the Google consent URL for read-only Gmail, with a state signed for this user + company."""
+        try:
+            return {"url": g.start(who.user_id, who.company_id, body.redirect_uri)}
+        except ConnectError as e:
+            raise HTTPException(e.status, e.detail) from None
+
+    @app.post("/gmail/connect/finish")
+    def gmail_connect_finish(body: GmailConnectFinish, who: Caller = Depends(owner_session),
+                             g: GmailConnector = Depends(connector)) -> dict:
+        """Step 3: Google sent the browser back with a code; store the encrypted token and queue the import."""
+        try:
+            address = g.finish(who.user_id, who.company_id, body.code, body.state)
+        except ConnectError as e:
+            raise HTTPException(e.status, e.detail) from None
+        log.info(json.dumps({"event": "gmail_connected", "company_id": who.company_id}))
+        return {"gmail_address": address, "status": "importing"}
+
+    @app.get("/gmail/status")
+    def gmail_status(who: Caller = Depends(owner_session), g: GmailConnector = Depends(connector)) -> dict:
+        found = g.status(who.company_id)
+        return {"connected": found is not None, **(found or {})}
 
     @app.post("/ask", response_model=AskResponse)
     async def ask(body: AskRequest, s: InboxStore = Depends(company),

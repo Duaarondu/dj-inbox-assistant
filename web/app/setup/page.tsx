@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { createCompany, getMe, Me } from "@/lib/api";
+import { createCompany, getGmailStatus, getMe, GmailStatus, Me, startGmailConnect } from "@/lib/api";
 import { accessToken, supabase } from "@/lib/supabase/client";
 
 export default function Setup() {
@@ -13,6 +13,8 @@ export default function Setup() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [gmail, setGmail] = useState<GmailStatus | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
   async function load(): Promise<Me | null> {
     const token = await accessToken();
@@ -28,6 +30,28 @@ export default function Setup() {
       .then((m) => m && setMe(m))
       .catch((e: Error) => setError(e.message));
   }, []);
+
+  useEffect(() => {
+    if (!me?.company_id) return;
+    accessToken()
+      .then((token) => (token ? getGmailStatus(token) : null))
+      .then((g) => g && setGmail(g))
+      .catch((e: Error) => setError(e.message));
+  }, [me?.company_id]);
+
+  async function connectGmail() {
+    setConnecting(true);
+    setError(null);
+    try {
+      const token = await accessToken();
+      if (!token) return window.location.replace("/signin");
+      const { url } = await startGmailConnect(token, `${window.location.origin}/gmail/callback`);
+      window.location.assign(url);
+    } catch (e) {
+      setError((e as Error).message);
+      setConnecting(false);
+    }
+  }
 
   async function submit() {
     const text = name.trim();
@@ -84,7 +108,25 @@ export default function Setup() {
         {me?.company_id && (
           <>
             <h1>You&apos;re set up</h1>
-            <p className="muted">Next: connect Gmail so we can build your lead tracker. (Coming next.)</p>
+            {gmail?.connected ? (
+              <p className="muted">
+                Gmail: <strong>{gmail.gmail_address}</strong> ·{" "}
+                {gmail.status === "importing" && "importing your emails…"}
+                {gmail.status === "ready" && "up to date"}
+                {gmail.status === "error" && `import failed: ${gmail.error ?? "unknown error"}`}
+                {gmail.status === "disconnected" && "disconnected"}
+              </p>
+            ) : (
+              <p className="muted">
+                Next: connect Gmail so we can build your lead tracker. We only ask to <strong>read</strong> your
+                email; spam, promotions and social mail are skipped.
+              </p>
+            )}
+            {(!gmail?.connected || gmail.status === "error") && (
+              <button className="primary" onClick={connectGmail} disabled={connecting || !gmail}>
+                {connecting ? "Opening Google…" : gmail?.connected ? "Reconnect Gmail" : "Connect Gmail"}
+              </button>
+            )}
           </>
         )}
 
