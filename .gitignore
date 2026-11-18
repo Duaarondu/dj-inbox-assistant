@@ -11,3 +11,6 @@ data/extractions/
 # Gmail demo loader progress (Message-ID -> Gmail ids)
 synthetic_inbox/.gmail_import_state.json
 synthetic_inbox/.gmail_import_state.tmp
+
+Claude outputs/
+evals/results/partial/
