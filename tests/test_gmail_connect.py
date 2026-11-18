@@ -230,3 +230,38 @@ def test_not_configured_server_says_503():
         r = c.post("/gmail/connect", json={"redirect_uri": CALLBACK}, headers=bearer(token(sub=OWNER)))
     assert r.status_code == 503
     store_mod.clear()
+
+
+def test_a_placeholder_client_id_stops_the_server(monkeypatch):
+    """Bug Journal #24: GMAIL_CLIENT_ID=PASTE_CLIENT_ID was deployed twice; now the API refuses to start."""
+    env = {"GMAIL_CLIENT_ID": "PASTE_CLIENT_ID", "GMAIL_CLIENT_SECRET": "s", "GMAIL_STATE_SECRET": "x",
+           "GMAIL_REDIRECT_URIS": CALLBACK, "GMAIL_KMS_KEY": "k"}
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    with pytest.raises(SystemExit):
+        ConnectConfig.from_env()
+    monkeypatch.setenv("GMAIL_CLIENT_ID", "1090658566619-abc123.apps.googleusercontent.com")
+    assert ConnectConfig.from_env().client_id.endswith(".apps.googleusercontent.com")
+
+
+def test_a_failed_exchange_logs_googles_error_code_but_no_secret(caplog):
+    class Http:
+        def post(self, url, **kw):
+            return Resp(401, {"error": "invalid_client", "error_description": "Unauthorized"})
+
+    with caplog.at_level("WARNING", logger="dj_inbox.api"), pytest.raises(ConnectError):
+        GoogleOAuth(CFG, Http()).exchange("code-xyz", CALLBACK)
+    assert "invalid_client" in caplog.text
+    assert "code-xyz" not in caplog.text and "client-secret" not in caplog.text
+
+
+def test_sync_again_queues_an_import_only_when_connected(api):
+    c, _, db = api
+    h = bearer(token(sub=OWNER))
+    assert c.post("/gmail/sync", headers=h).status_code == 404
+    url = c.post("/gmail/connect", json={"redirect_uri": CALLBACK}, headers=h).json()["url"]
+    state = parse_qs(urlparse(url).query)["state"][0]
+    c.post("/gmail/connect/finish", json={"code": "c", "state": state}, headers=h)
+    assert c.post("/gmail/sync", headers=h).json() == {"status": "importing"}
+    assert db.queued == ["c_a", "c_a"]
+    assert c.post("/gmail/sync").status_code == 401
