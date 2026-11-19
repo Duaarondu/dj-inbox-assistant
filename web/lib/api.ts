@@ -51,24 +51,30 @@ async function call<T>(path: string, init?: RequestInit, messages: Record<number
   return res.json() as Promise<T>;
 }
 
+const SESSION_EXPIRED = "Your sign-in expired. Please sign in again.";
+
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
-export const ask = (question: string) =>
+// ask / getLeads / getThread serve the public demo without a token, and the signed-in user's OWN company with
+// one (the server picks the company from the verified token).
+const maybeBearer = (token?: string): Record<string, string> => (token ? bearer(token) : {});
+
+export const ask = (question: string, token?: string) =>
   call<AskResponse>(
     "/ask",
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) },
-    { 422: "Please type a question (up to 500 characters)." },
+    { method: "POST", headers: { "Content-Type": "application/json", ...maybeBearer(token) }, body: JSON.stringify({ question }) },
+    { 401: SESSION_EXPIRED, 422: "Please type a question (up to 500 characters)." },
   );
 
-export const getLeads = () => call<{ count: number; leads: Lead[] }>("/leads");
+export const getLeads = (token?: string) =>
+  call<{ count: number; leads: Lead[] }>("/leads", { headers: maybeBearer(token) }, { 401: SESSION_EXPIRED });
 
-export const getThread = (threadId: string) => call<Thread>(`/threads/${encodeURIComponent(threadId)}`);
+export const getThread = (threadId: string, token?: string) =>
+  call<Thread>(`/threads/${encodeURIComponent(threadId)}`, { headers: maybeBearer(token) }, { 401: SESSION_EXPIRED });
 
 // Signed-in calls: the Supabase access token goes in the Authorization header on every request.
 // The server takes the user (and company) from the verified token, never from the request body.
 export type Me = { user_id: string; company_id: string | null };
-
-const SESSION_EXPIRED = "Your sign-in expired. Please sign in again.";
 
 export const getMe = (token: string) => call<Me>("/me", { headers: bearer(token) }, { 401: SESSION_EXPIRED });
 

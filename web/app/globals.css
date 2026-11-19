@@ -85,3 +85,6 @@ tbody tr:hover, tbody tr:focus { background: var(--accent-soft); outline: none; 
 @media (max-width: 640px) {
   .askForm { flex-direction: column; }
 }
+
+/* rows that arrived while the page was open (automatic updates) */
+tr.new td { background: #fff8db; transition: background 2s; }

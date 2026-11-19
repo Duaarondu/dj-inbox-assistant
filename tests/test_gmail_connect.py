@@ -154,11 +154,11 @@ def test_finish_encrypts_the_token_bound_to_the_company_and_queues_the_import():
     assert token_call["data"]["redirect_uri"] == CALLBACK             # the URI from the signed state
 
 
-def test_consent_without_gmail_is_refused_and_the_token_revoked():
+def test_consent_without_gmail_is_refused_and_nothing_is_revoked():
     google, db = FakeGoogle(scope="openid email"), FakeDb({"c_a": OWNER})
     with pytest.raises(ConnectError, match="Gmail access wasn't granted"):
         connector(google, db).finish(OWNER, "c_a", "code", make_state(CFG, OWNER, "c_a", CALLBACK))
-    assert google.revoked == ["refresh-abc"] and db.rows == {} and db.queued == []
+    assert google.revoked == [] and db.rows == {} and db.queued == []
 
 
 def test_a_used_or_bad_code_is_a_clear_error():
@@ -167,12 +167,14 @@ def test_a_used_or_bad_code_is_a_clear_error():
         connector(google, FakeDb({"c_a": OWNER})).finish(OWNER, "c_a", "old", make_state(CFG, OWNER, "c_a", CALLBACK))
 
 
-def test_a_mailbox_of_another_company_is_409_and_revoked():
+def test_a_mailbox_of_another_company_is_409_and_its_live_connection_is_left_alone():
+    """Bug Journal #26: revoking the refused token revoked the whole grant, so the OTHER company's token died."""
     google, db = FakeGoogle(), FakeDb({"c_a": OWNER, "c_b": OTHER})
     db.rows["c_b"] = {"address": "owner@north.example", "ciphertext": b"x", "history_id": None}
     with pytest.raises(ConnectError) as e:
         connector(google, db).finish(OWNER, "c_a", "code", make_state(CFG, OWNER, "c_a", CALLBACK))
-    assert e.value.status == 409 and google.revoked == ["refresh-abc"] and db.queued == []
+    assert e.value.status == 409 and google.revoked == [] and db.queued == []
+    assert db.rows["c_b"]["ciphertext"] == b"x"
 
 
 # ---------- the endpoints ----------
