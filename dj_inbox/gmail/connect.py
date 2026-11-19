@@ -226,8 +226,10 @@ class GmailConnector:
         tokens = self.oauth.exchange(code, redirect_uri)
         refresh, access = tokens.get("refresh_token"), tokens.get("access_token", "")
         granted = set(tokens.get("scope", "").split())
+        # Refusals below DROP the new token but never revoke it. Google revokes the whole grant (this Google
+        # account + our client), which also kills a live connection of the same mailbox: Nov 19, a refused
+        # Connect on the wrong company revoked the demo mailbox's working token (Bug Journal #26).
         if GMAIL_SCOPE not in granted:
-            self.oauth.revoke(refresh or access)
             raise ConnectError(400, "Gmail access wasn't granted. Tick the Gmail box on Google's screen and try again.")
         if not refresh:
             raise ConnectError(400, "Google didn't send a long-lived token. Start again from Connect Gmail.")
@@ -237,10 +239,8 @@ class GmailConnector:
         try:
             self._save(user_id, company_id, address, ciphertext, self.cfg.kms_key, profile.get("historyId"))
         except MailboxTaken:
-            self.oauth.revoke(refresh)
             raise ConnectError(409, "This Gmail account is already connected to another company.") from None
         except NotOwner:
-            self.oauth.revoke(refresh)
             raise ConnectError(403, "Only the company owner can connect Gmail.") from None
         self._enqueue(company_id)
         return address

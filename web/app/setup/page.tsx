@@ -148,9 +148,10 @@ export default function Setup() {
               </p>
             )}
             {gmail?.connected && gmail.status === "ready" && (
-              <button className="primary" onClick={syncAgain}>
-                Sync again
-              </button>
+              <p>
+                <Link className="primary" href="/inbox">Open your inbox →</Link>{" "}
+                <button onClick={syncAgain}>Sync again</button>
+              </p>
             )}
             {(!gmail?.connected || gmail.status === "error") && (
               <button className="primary" onClick={connectGmail} disabled={connecting || !gmail}>
