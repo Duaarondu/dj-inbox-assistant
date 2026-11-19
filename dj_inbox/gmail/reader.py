@@ -20,7 +20,11 @@ from email.message import EmailMessage
 from dj_inbox.ingest import parse_raw
 
 MESSAGES_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
-IMPORT_QUERY = "-in:spam -in:trash -category:promotions -category:social"
+HISTORY_URL = "https://gmail.googleapis.com/gmail/v1/users/me/history"
+# Drafts are skipped: every autosave creates a new message id, which would re-run extraction for nothing.
+IMPORT_QUERY = "-in:spam -in:trash -in:drafts -category:promotions -category:social"
+# The same filter, as Gmail labels, for messages found through history.list (which takes no search query).
+SKIP_LABELS = {"SPAM", "TRASH", "DRAFT", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL"}
 RETRYABLE = {429, 500, 502, 503, 504}
 # Gmail reports usage limits as HTTP 403 (not only 429) with one of these reasons: wait and retry those.
 # Any other 403 (e.g. insufficientPermissions) is a real error.
@@ -33,6 +37,10 @@ MAX_WAIT_S = 64
 
 class GmailError(RuntimeError):
     """A Gmail API call failed for good (not a rate limit or a hiccup). The message never includes the token."""
+
+
+class GmailNotFound(GmailError):
+    """HTTP 404: the message was deleted, or history.list's start id is too old (Gmail keeps about a week)."""
 
 
 def _reasons(resp) -> set[str]:
@@ -88,7 +96,8 @@ class GmailReader:
             retry = resp.status_code in RETRYABLE or (resp.status_code == 403 and reasons & RATE_LIMIT_REASONS)
             if not retry or attempt == self.tries:
                 why = f" ({', '.join(sorted(reasons))})" if reasons else ""
-                raise GmailError(f"Gmail API returned HTTP {resp.status_code}{why} for {url.rsplit('/', 1)[-1]}")
+                kind = GmailNotFound if resp.status_code == 404 else GmailError
+                raise kind(f"Gmail API returned HTTP {resp.status_code}{why} for {url.rsplit('/', 1)[-1]}")
             self.rate_limited += 1
             self.sleep(_retry_after(resp) or min(2 ** attempt + random.uniform(0, 1), MAX_WAIT_S))
         raise AssertionError("unreachable")
@@ -107,17 +116,51 @@ class GmailReader:
                 return ids
             params = {**params, "pageToken": token}
 
+    def list_new_ids(self, start_history_id: str) -> tuple[list[str], str]:
+        """(ids of messages ADDED since start_history_id that pass the import filter, Gmail's newest history id).
+
+        Raises GmailNotFound when start_history_id is too old: the caller falls back to a full import.
+        A message added and then deleted before we look is still listed here; fetch(skip_missing=True) drops it.
+        """
+        ids: list[str] = []
+        seen: set[str] = set()
+        params: dict = {"startHistoryId": start_history_id, "historyTypes": "messageAdded", "maxResults": 500}
+        latest = start_history_id
+        while True:
+            page = self._get(HISTORY_URL, params)
+            latest = str(page.get("historyId") or latest)
+            for record in page.get("history", []):
+                for added in record.get("messagesAdded", []):
+                    msg = added.get("message", {})
+                    mid = msg.get("id")
+                    if mid and mid not in seen and not (set(msg.get("labelIds", [])) & SKIP_LABELS):
+                        seen.add(mid)
+                        ids.append(mid)
+            token = page.get("nextPageToken")
+            if not token:
+                return ids, latest
+            params = {**params, "pageToken": token}
+
+    def _get_or_none(self, gmail_id: str) -> tuple[EmailMessage, str, str] | None:
+        try:
+            return self.get(gmail_id)
+        except GmailNotFound:
+            return None
+
     def get(self, gmail_id: str) -> tuple[EmailMessage, str, str]:
         """(parsed email, Gmail thread id, Gmail message id) for one message."""
         data = self._get(f"{MESSAGES_URL}/{gmail_id}", {"format": "raw"})
         raw = base64.urlsafe_b64decode(data["raw"] + "=" * (-len(data["raw"]) % 4))
         return parse_raw(raw), data["threadId"], data["id"]
 
-    def fetch(self, ids: list[str]) -> list[tuple[EmailMessage, str, str]]:
+    def fetch(self, ids: list[str], skip_missing: bool = False) -> list[tuple[EmailMessage, str, str]]:
+        """Fetch messages. skip_missing: drop ids Gmail no longer has (deleted since they were listed)."""
         out = []
+        one = self._get_or_none if skip_missing else self.get
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            for n, item in enumerate(pool.map(self.get, ids), 1):
-                out.append(item)
+            for n, item in enumerate(pool.map(one, ids), 1):
+                if item is not None:
+                    out.append(item)
                 if self.progress and (n % 100 == 0 or n == len(ids)):
                     self.progress(f"   fetched {n}/{len(ids)} (Gmail asked us to slow down {self.rate_limited}x)")
         return out

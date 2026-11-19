@@ -6,7 +6,9 @@
 #
 # Same guards as deploy.sh (Bug Journal #20): repo root, main, clean, in sync with GitHub, pinned project.
 # The worker:
-#   - is not public (--no-allow-unauthenticated): only dj-inbox-tasks (Cloud Tasks) gets run.invoker on it
+#   - is not public (--no-allow-unauthenticated): only dj-inbox-tasks (Cloud Tasks + Cloud Scheduler) and
+#     dj-inbox-push (Pub/Sub, Gmail notifications) get run.invoker; each route also checks which one called
+#     (dj_inbox/worker/app.py relies on this flag: never deploy the worker public)
 #   - runs as dj-inbox-worker: KMS decrypt-only on the Gmail token key, Gemini, two secrets
 #   - connects to Postgres as app_ingest (secret database-ingest-url): writes only the company of each transaction
 #   - handles one import at a time per instance, up to 30 minutes (Cloud Tasks' longest deadline)
@@ -16,6 +18,9 @@ PROJECT="dj-inbox-assistant"
 REGION="us-east1"
 SERVICE="dj-inbox-worker"
 SA="dj-inbox-worker@${PROJECT}.iam.gserviceaccount.com"
+PUSH_INVOKER="dj-inbox-push@${PROJECT}.iam.gserviceaccount.com"
+TASKS_INVOKER="dj-inbox-tasks@${PROJECT}.iam.gserviceaccount.com"
+WATCH_TOPIC="projects/${PROJECT}/topics/gmail-push"
 
 cd "$(dirname "$0")/.."
 if [[ ! -f Dockerfile || ! -d dj_inbox/worker || ! -d .git ]]; then
@@ -49,5 +54,5 @@ gcloud run deploy "$SERVICE" --source . --region "$REGION" --project "$PROJECT" 
     --service-account "$SA" \
     --no-allow-unauthenticated \
     --concurrency 1 --max-instances 2 --timeout 1800 --memory 1Gi --cpu 1 \
-    --set-env-vars "APP_MODULE=dj_inbox.worker.app:app,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=global,GMAIL_CLIENT_ID=${CLIENT_ID}" \
+    --set-env-vars "APP_MODULE=dj_inbox.worker.app:app,GOOGLE_CLOUD_PROJECT=${PROJECT},GOOGLE_CLOUD_LOCATION=global,GMAIL_CLIENT_ID=${CLIENT_ID},PUSH_INVOKER=${PUSH_INVOKER},TASKS_INVOKER=${TASKS_INVOKER},GMAIL_WATCH_TOPIC=${WATCH_TOPIC}" \
     --set-secrets "DATABASE_URL=database-ingest-url:latest,GMAIL_CLIENT_SECRET=gmail-client-secret:latest"
